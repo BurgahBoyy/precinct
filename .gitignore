@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+.env
+*.env
+.secrets/
+# never commit secrets
+*api key*.txt
+*apikey*.txt
+anthropic_key.txt
