@@ -1,0 +1,106 @@
+"""Precinct — persistence (SQLite, stdlib). User-generated data survives restart.
+DB path from env PRECINCT_DB, else <project>/precinct.db. One connection, thread-safe writes."""
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+_DB_PATH = os.environ.get("PRECINCT_DB", str(Path(__file__).resolve().parent.parent / "precinct.db"))
+_lock = threading.Lock()
+_conn: sqlite3.Connection | None = None
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def conn() -> sqlite3.Connection:
+    global _conn
+    if _conn is None:
+        _conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+        _conn.row_factory = sqlite3.Row
+        _conn.executescript("""
+        CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, office_type TEXT, created TEXT);
+        CREATE TABLE IF NOT EXISTS voter_tags(campaign_id INT, voter_id TEXT, tag TEXT, created TEXT, UNIQUE(campaign_id,voter_id,tag));
+        CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, name TEXT, query TEXT, voter_ids TEXT, count INT, created TEXT);
+        CREATE TABLE IF NOT EXISTS contributions(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, donor_name TEXT, amount TEXT, date TEXT, phase TEXT, method TEXT, address TEXT, check_number TEXT, provenance TEXT, created TEXT);
+        CREATE TABLE IF NOT EXISTS expenses(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, payee TEXT, amount TEXT, date TEXT, purpose TEXT, provenance TEXT, created TEXT);
+        """)
+        _conn.commit()
+    return _conn
+
+
+def _write(sql: str, args=()):
+    with _lock:
+        cur = conn().execute(sql, args)
+        conn().commit()
+        return cur.lastrowid
+
+
+# --- campaigns ---
+def create_campaign(name: str, office_type: str = "other") -> int:
+    return _write("INSERT INTO campaigns(name,office_type,created) VALUES(?,?,?)", (name, office_type, _now()))
+
+def list_campaigns() -> list[dict]:
+    return [dict(r) for r in conn().execute("SELECT * FROM campaigns ORDER BY id")]
+
+def get_campaign(cid: int) -> dict | None:
+    r = conn().execute("SELECT * FROM campaigns WHERE id=?", (cid,)).fetchone()
+    return dict(r) if r else None
+
+
+# --- voter tags (CRM + canvass capture) ---
+def add_tag(cid: int, voter_id: str, tag: str):
+    _write("INSERT OR IGNORE INTO voter_tags(campaign_id,voter_id,tag,created) VALUES(?,?,?,?)", (cid, voter_id, tag, _now()))
+
+def remove_tag(cid: int, voter_id: str, tag: str):
+    _write("DELETE FROM voter_tags WHERE campaign_id=? AND voter_id=? AND tag=?", (cid, voter_id, tag))
+
+def tags_for_voter(cid: int, voter_id: str) -> list[str]:
+    return [r["tag"] for r in conn().execute("SELECT tag FROM voter_tags WHERE campaign_id=? AND voter_id=?", (cid, voter_id))]
+
+def tagged_voters(cid: int, tag: str | None = None) -> list[dict]:
+    if tag:
+        rows = conn().execute("SELECT voter_id,tag FROM voter_tags WHERE campaign_id=? AND tag=?", (cid, tag))
+    else:
+        rows = conn().execute("SELECT voter_id,tag FROM voter_tags WHERE campaign_id=?", (cid,))
+    return [dict(r) for r in rows]
+
+def tag_counts(cid: int) -> dict:
+    return {r["tag"]: r["n"] for r in conn().execute("SELECT tag,COUNT(*) n FROM voter_tags WHERE campaign_id=? GROUP BY tag", (cid,))}
+
+
+# --- saved lists / turf ---
+def save_list(cid: int, name: str, query: str, voter_ids: list[str]) -> int:
+    return _write("INSERT INTO lists(campaign_id,name,query,voter_ids,count,created) VALUES(?,?,?,?,?,?)",
+                  (cid, name, query, json.dumps(voter_ids), len(voter_ids), _now()))
+
+def get_lists(cid: int) -> list[dict]:
+    return [{**dict(r), "voter_ids": json.loads(r["voter_ids"])}
+            for r in conn().execute("SELECT * FROM lists WHERE campaign_id=? ORDER BY id DESC", (cid,))]
+
+def get_list(lid: int) -> dict | None:
+    r = conn().execute("SELECT * FROM lists WHERE id=?", (lid,)).fetchone()
+    if not r:
+        return None
+    d = dict(r); d["voter_ids"] = json.loads(d["voter_ids"]); return d
+
+
+# --- finance ---
+def add_contribution(cid: int, **f) -> int:
+    return _write("INSERT INTO contributions(campaign_id,donor_name,amount,date,phase,method,address,check_number,provenance,created) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                  (cid, f["donor_name"], f["amount"], f["date"], f["phase"], f["method"], f.get("address", ""), f.get("check_number", ""), f.get("provenance", "entered"), _now()))
+
+def get_contributions(cid: int) -> list[dict]:
+    return [dict(r) for r in conn().execute("SELECT * FROM contributions WHERE campaign_id=? ORDER BY id", (cid,))]
+
+def add_expense(cid: int, payee: str, amount: str, date: str, purpose: str, provenance: str = "entered") -> int:
+    return _write("INSERT INTO expenses(campaign_id,payee,amount,date,purpose,provenance,created) VALUES(?,?,?,?,?,?,?)",
+                  (cid, payee, amount, date, purpose, provenance, _now()))
+
+def get_expenses(cid: int) -> list[dict]:
+    return [dict(r) for r in conn().execute("SELECT * FROM expenses WHERE campaign_id=? ORDER BY id", (cid,))]
