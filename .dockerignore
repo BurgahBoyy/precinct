@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.db
+tests/
+*.md
+.git/
+.gitignore
+# never ship secrets
+*api key*.txt
+*apikey*.txt
+anthropic_key.txt
+.env
