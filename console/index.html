@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Precinct</title>
+<style>
+  :root{
+    --navy:#14213d; --navy2:#1f2f52; --blue:#2563eb; --blue-d:#1e3a8a;
+    --bg:#f5f6f8; --card:#fff; --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb;
+    --good:#059669; --warn:#b45309; --warnbg:#fff7ed;
+    --dem:#2563eb; --rep:#dc2626; --npa:#6b7280; --grn:#16a34a; --lib:#7c3aed;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:inherit}
+  .app{display:flex;min-height:100vh}
+  /* sidebar */
+  .side{width:216px;background:var(--navy);color:#cbd5e1;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{padding:18px 20px;color:#fff;font-size:18px;font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--navy2)}
+  .brand small{font-weight:400;font-size:11px;color:#93a3b8;letter-spacing:.5px}
+  nav{padding:10px 10px;flex:1}
+  .nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;cursor:pointer;color:#cbd5e1;font-size:14px;margin:2px 0}
+  .nav:hover{background:var(--navy2);color:#fff}
+  .nav.on{background:var(--blue);color:#fff}
+  .nav .ph{font-size:11px;margin-left:auto;color:#93a3b8;background:#0b1striped;border:1px solid #33456b;border-radius:20px;padding:1px 7px}
+  .side .foot{padding:14px 20px;font-size:11px;color:#7c8aa5;border-top:1px solid var(--navy2)}
+  /* main */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{background:#fff;border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+  .top h1{margin:0;font-size:17px;font-weight:600}
+  .badge{font-size:12px;padding:5px 11px;border-radius:20px;font-weight:600}
+  .badge.sample{background:var(--warnbg);color:var(--warn);border:1px solid #fed7aa}
+  .badge.real{background:#ecfdf5;color:var(--good);border:1px solid #a7f3d0}
+  .content{padding:22px 24px 60px;max-width:1080px;width:100%}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi b{display:block;font-size:26px;font-weight:700;line-height:1.1}
+  .kpi small{color:var(--muted);font-size:12.5px}
+  h3{margin:0 0 12px;font-size:15px}
+  .sub{color:var(--muted);font-size:12.5px;margin:-6px 0 12px}
+  /* search */
+  .search{display:flex;gap:10px;flex-wrap:wrap}
+  .search input{flex:1;min-width:280px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;font-size:15px;outline:none}
+  .search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #2563eb22}
+  .btn{padding:12px 18px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:600;cursor:pointer;font-size:14px}
+  .btn:hover{background:var(--blue-d)}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .btn.ghost:hover{background:#f8fafc}
+  .ex{margin-top:10px;font-size:13px;color:var(--muted)}
+  .ex a{color:var(--blue);cursor:pointer;border-bottom:1px dotted;margin-right:4px}
+  .chip{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:3px 10px;margin:3px 4px 0 0;font-size:12.5px}
+  .warnrow{color:var(--warn);font-size:12.5px;margin-top:6px}
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+  th .d,.d{color:var(--blue)}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f8fafc}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff}
+  .p-DEM{background:var(--dem)}.p-REP{background:var(--rep)}.p-GRN{background:var(--grn)}.p-LIB{background:var(--lib)}
+  .p-NPA,.p-OTHER,.p-UNKNOWN,.p-IND{background:var(--npa)}
+  .bar{height:8px;background:#eef2ff;border-radius:6px;overflow:hidden;min-width:60px}
+  .bar>span{display:block;height:100%;background:linear-gradient(90deg,#93c5fd,#2563eb)}
+  .muted{color:var(--muted)}
+  .banner{background:var(--warnbg);border:1px solid #fed7aa;color:var(--warn);padding:9px 13px;border-radius:10px;font-size:12.5px;margin-bottom:16px}
+  /* drawer */
+  .scrim{position:fixed;inset:0;background:#0f172a55;display:none;z-index:40}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:92vw;background:#fff;border-left:1px solid var(--line);transform:translateX(100%);transition:transform .18s;z-index:50;overflow:auto}
+  .drawer.open{transform:none}.scrim.open{display:block}
+  .dhead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start}
+  .drawer .x{cursor:pointer;color:var(--muted);font-size:20px;border:0;background:none}
+  .drawer .body{padding:18px 20px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv span:first-child{color:var(--muted)}
+  .tl{margin-top:6px}
+  .tl .ev{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:12.5px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--blue);flex:none}
+  .legend{font-size:11.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px;margin-top:8px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:13.5px;opacity:0;transition:opacity .2s;z-index:60}
+  .toast.show{opacity:1}
+  .soon{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .soon .card{margin:0}
+  .soon h4{margin:0 0 4px;font-size:14px}
+  .soon .tag{display:inline-block;font-size:11px;color:var(--warn);background:var(--warnbg);border:1px solid #fed7aa;border-radius:20px;padding:1px 9px;margin-bottom:8px}
+  .hide{display:none}
+  /* --- UX polish pass --- */
+  section{animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .nav{transition:background .12s,color .12s}
+  .btn{transition:background .12s,transform .06s}
+  .btn:active{transform:scale(.98)}
+  .card{transition:box-shadow .15s,border-color .15s}
+  .card:hover{box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #2563eb22}
+  tbody tr{transition:background .1s}
+  .kpi{transition:transform .1s}.kpi:hover{transform:translateY(-1px)}
+  .spin{display:inline-block;width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:rot .7s linear infinite;vertical-align:middle}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .chip,.pill{transition:transform .08s}
+  @media(max-width:760px){
+    .app{flex-direction:column}
+    .side{width:100%;height:auto;position:static;flex-direction:column}
+    .brand{border-bottom:1px solid var(--navy2)}
+    nav{display:flex;flex-wrap:wrap;padding:6px;gap:4px}
+    .nav{white-space:nowrap;margin:0;padding:8px 12px}
+    .side .foot{display:none}
+    .content{padding:16px 14px 60px}
+    .drawer{width:100%}
+    .top{padding:12px 16px}
+    .search input{min-width:0}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span>▚ Precinct</span></div>
+    <nav id="nav">
+      <div class="nav on" data-v="dash">◆ Dashboard</div>
+      <div class="nav" data-v="target">◎ Targeting</div>
+      <div class="nav" data-v="lists">▤ Lists &amp; turf</div>
+      <div class="nav" data-v="field">➤ Field ops</div>
+      <div class="nav" data-v="finance">$ Finance</div>
+      <div class="nav" data-v="fundraise">◈ Fundraising</div>
+      <div class="nav" data-v="petitions">✎ Petitions</div>
+    </nav>
+    <div class="foot">v0.1 · Module 1–2 live<br/><span id="foot-data">checking data…</span></div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <h1 id="vtitle">Dashboard</h1>
+      <span id="databadge" class="badge sample">checking…</span>
+    </div>
+    <div class="content">
+      <div id="banner" class="banner hide"></div>
+
+      <!-- DASHBOARD -->
+      <section id="v-dash">
+        <div class="kpis"
