@@ -571,6 +571,14 @@ def frontend() -> FileResponse:
     return FileResponse(str(_FRONTEND))
 
 
+_OG = Path(__file__).resolve().parent.parent / "console" / "og.png"
+
+
+@app.get("/og.png")
+def og_image() -> FileResponse:
+    return FileResponse(str(_OG), media_type="image/png")
+
+
 # ---------- Module 7 Petitions + Module 8 Fundraising ----------
 from . import petitions as PET  # noqa: E402
 
