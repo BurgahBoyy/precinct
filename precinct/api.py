@@ -206,12 +206,15 @@ def voter(voter_id: str, campaign_id: int = DEFAULT_CID) -> dict:
 def target(req: TargetRequest) -> dict:
     parsed, matched = _run_query(req.query, req.limit)
     ai_note = None
-    if not parsed.filters and not parsed.low_propensity:
+    thin = (not parsed.filters and not parsed.low_propensity) or (
+        len(parsed.filters) < 2 and not parsed.low_propensity and len(req.query.split()) >= 5)
+    if thin:
         from .insights import rephrase_query
         rq = rephrase_query(req.query)
         if rq:
             p2, m2 = _run_query(rq, req.limit)
-            if p2.filters or p2.low_propensity:
+            gain = len(p2.filters) + (1 if p2.low_propensity else 0) > len(parsed.filters) + (1 if parsed.low_propensity else 0)
+            if gain:
                 parsed, matched, ai_note = p2, m2, f'Claude interpreted your phrasing as: "{rq}"'
     filters = list(parsed.filters)
     if parsed.low_propensity:
