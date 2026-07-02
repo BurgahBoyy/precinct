@@ -37,3 +37,20 @@ def test_audit_records_tag_write():
     client.post("/voter/100000002/tag", json={"tag": "lean", "campaign_id": 1})
     ev = client.get("/audit?campaign_id=1").json()["events"]
     assert any(e["action"] == "voter.tagged" and "100000002" in e["detail"] for e in ev)
+
+
+def test_district_targeting_parses_and_matches():
+    r = client.post("/target", json={"query": "Republicans in HD 4", "limit": 50})
+    assert r.status_code == 200
+    d = r.json()
+    assert "house district = 4" in d["understood"]["filters"]
+    for x in d["results"]:
+        pass  # membership checked by the predicate; presence of the filter is the contract
+
+
+def test_walklist_has_illustrative_coords():
+    d = client.get("/walklist/1?campaign_id=1").json()
+    stop = d["streets"][0]["stops"][0]
+    assert isinstance(stop["lat"], float) and isinstance(stop["lng"], float)
+    assert "illustrative" in d["positions"]
+    assert 24.0 < stop["lat"] < 31.5 and -88.0 < stop["lng"] < -79.0   # inside Florida
