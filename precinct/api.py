@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -25,16 +25,24 @@ app = FastAPI(title="Precinct API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 from . import auth as AUTH  # noqa: E402
+from . import hardening as HARD  # noqa: E402
 
 
 @app.middleware("http")
 async def _auth_gate(request: Request, call_next):
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+    b = HARD.bucket_for(request.url.path, request.method)
+    if b and not HARD.allowed(ip, b):
+        return JSONResponse({"detail": "rate limit exceeded — slow down"}, status_code=429)
     if AUTH.enabled() and not AUTH.is_public(request.url.path):
         user = AUTH.user_from_token(request.cookies.get(AUTH.COOKIE))
         if not user:
             return JSONResponse({"detail": "authentication required"}, status_code=401)
         request.state.user = user
-    return await call_next(request)
+    response = await call_next(request)
+    for k, v in HARD.HEADERS.items():
+        response.headers.setdefault(k, v)
+    return response
 
 
 def _user(request: Request) -> dict | None:
@@ -440,6 +448,42 @@ def finance_report(office: str = "other", campaign_id: int = DEFAULT_CID) -> dic
     rep = FIN.generate_report(_contribs_for(campaign_id), _expenses_for(campaign_id), office)
     rep["data_provenance"] = "illustrative seed + entered"
     return rep
+
+
+@app.post("/admin/load-voters")
+async def admin_load_voters(request: Request, registration: UploadFile = File(...),
+                            history: UploadFile = File(None)) -> dict:
+    """Swap the in-memory voter store for a REAL Florida extract zip. Admin-only, auth required."""
+    if not AUTH.enabled():
+        raise HTTPException(status_code=403, detail="voter-file loading requires auth to be enabled (admin-only)")
+    u = _user(request)
+    if not u or u.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="site admin only")
+    import os as _os
+    import tempfile
+    global STORE, UNIVERSE, BY_ID, TURNOUT_BASIS
+    data = await registration.read()
+    if len(data) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="file too large for this instance — load county-by-county")
+    with tempfile.TemporaryDirectory() as td:
+        rp = _os.path.join(td, "reg.zip")
+        open(rp, "wb").write(data)
+        hp = ""
+        if history is not None and history.filename:
+            hp = _os.path.join(td, "hist.zip")
+            open(hp, "wb").write(await history.read())
+        try:
+            new_store = VoterStore.from_fl_zip(rp, hp)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"could not parse the extract: {e}")
+    if len(new_store) == 0:
+        raise HTTPException(status_code=422, detail="no voters parsed — is this the official registration extract?")
+    STORE = new_store
+    UNIVERSE = E.election_universe(STORE.all(), types=(ElectionType.GENERAL,))
+    BY_ID = {v.voter_id: v for v in STORE.all()}
+    TURNOUT_BASIS = f"share of the {len(UNIVERSE)} general elections present in the loaded dataset"
+    DB.log_action(0, "admin.voters_loaded", f"{len(STORE)} voters loaded ({STORE.provenance}) by {u['email']}")
+    return {"loaded": len(STORE), "provenance": STORE.provenance, "general_elections": len(UNIVERSE)}
 
 
 class RegisterRequest(BaseModel):
