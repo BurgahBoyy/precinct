@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Precinct</title>
+<meta name="theme-color" content="#14213d" />
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%2314213d"/><rect x="18" y="18" width="28" height="28" rx="6" fill="%232563eb"/><rect x="54" y="18" width="28" height="28" rx="6" fill="%233b82f6" opacity=".55"/><rect x="18" y="54" width="28" height="28" rx="6" fill="%233b82f6" opacity=".55"/><rect x="54" y="54" width="28" height="28" rx="6" fill="%23fff" opacity=".9"/></svg>' />
+<title>Precinct — Campaign OS</title>
 <style>
   :root{
     --navy:#14213d; --navy2:#1f2f52; --blue:#2563eb; --blue-d:#1e3a8a;
@@ -101,6 +103,38 @@
   .spin{display:inline-block;width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:rot .7s linear infinite;vertical-align:middle}
   @keyframes rot{to{transform:rotate(360deg)}}
   .chip,.pill{transition:transform .08s}
+  /* --- UX finale --- */
+  .side{background:linear-gradient(180deg,#14213d 0%,#101a31 100%)}
+  .brand .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),#60a5fa);display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:#fff;box-shadow:0 2px 6px #2563eb55}
+  .brand .bt small{display:block;font-size:9.5px;letter-spacing:1.6px;color:#7c8aa5;font-weight:600;margin-top:1px}
+  .nav.on{background:linear-gradient(90deg,var(--blue),#3b82f6);box-shadow:0 2px 8px #2563eb44}
+  .btn{background:linear-gradient(135deg,var(--blue),#3b82f6)}
+  .btn:hover{background:linear-gradient(135deg,var(--blue-d),var(--blue));box-shadow:0 2px 8px #2563eb44}
+  .btn.ghost{background:#fff}
+  .btn.ghost:hover{background:#f8fafc;box-shadow:none}
+  .btn[disabled]{opacity:.6;cursor:wait}
+  .top{box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .topright{display:flex;align-items:center;gap:10px}
+  .campsel{padding:8px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-weight:600;color:var(--ink);background:#fff;cursor:pointer;max-width:230px}
+  .campsel:hover{border-color:var(--blue)}
+  .kpi{position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),#60a5fa);opacity:0;transition:opacity .15s}
+  .kpi:hover::before{opacity:1}
+  .skel{position:relative;overflow:hidden;background:#eef1f5;border-radius:8px;color:transparent!important}
+  .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#ffffffcc,transparent);animation:shimmer 1.1s infinite}
+  @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+  .ai-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;background:linear-gradient(135deg,#7c3aed,#2563eb);box-shadow:0 1px 4px #7c3aed44}
+  .rule-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--muted);background:#f1f5f9;border:1px solid var(--line)}
+  .tagchip{display:inline-flex;align-items:center;gap:6px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;padding:4px 6px 4px 11px;margin:3px 5px 3px 0;font-size:12.5px;font-weight:600}
+  .tagchip b{cursor:pointer;font-weight:700;color:#065f46;opacity:.55;padding:0 4px;border-radius:99px}
+  .tagchip b:hover{opacity:1;background:#a7f3d055}
+  .tagbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tagbtns .btn{padding:7px 13px;font-size:12.5px}
+  .empty{text-align:center;padding:28px 10px;color:var(--muted)}
+  .empty .big{font-size:26px;display:block;margin-bottom:6px;opacity:.5}
+  .toast{display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(15,23,42,.25);transform:translateX(-50%) translateY(8px)}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .dhead{position:sticky;top:0;background:#fff;z-index:2}
   @media(max-width:760px){
     .app{flex-direction:column}
     .side{width:100%;height:auto;position:static;flex-direction:column}
@@ -120,7 +154,7 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><span>▚ Precinct</span></div>
+    <div class="brand"><span class="mark">▚</span><span class="bt">Precinct<small>CAMPAIGN OS</small></span></div>
     <nav id="nav">
       <div class="nav on" data-v="dash">◆ Dashboard</div>
       <div class="nav" data-v="target">◎ Targeting</div>
@@ -136,7 +170,10 @@
   <div class="main">
     <div class="top">
       <h1 id="vtitle">Dashboard</h1>
-      <span id="databadge" class="badge sample">checking…</span>
+      <div class="topright">
+        <select id="campsel" class="campsel" onchange="switchCampaign(this.value)" title="Campaign"></select>
+        <span id="databadge" class="badge sample">checking…</span>
+      </div>
     </div>
     <div class="content">
       <div id="banner" class="banner hide"></div>
@@ -162,7 +199,7 @@
           <h3>Describe your target in plain English</h3>
           <div class="search">
             <input id="q" value="low-propensity Democratic women over 50 in Orange county who voted by mail" />
-            <button class="btn" onclick="runTarget()">Target ▶</button>
+            <button class="btn" id="tbtn" onclick="runTarget()">Target ▶</button>
           </div>
           <div class="ex">Try:
             <a onclick="ex('Republican men under 40 in Duval county')">Republican men under 40 in Duval</a>
@@ -210,7 +247,7 @@
           <h3>Read a contribution <span class="muted" style="font-size:12.5px">— paste a check memo or receipt line; AI drafts the entry</span></h3>
           <div class="search">
             <input id="fin-intake" placeholder="From Maria Gonzalez, 88 Sunset Blvd, $1,500 check #4402 6/20/2026" />
-            <button class="btn" onclick="runIntake()">Read ▶</button>
+            <button class="btn" id="fin-readbtn" onclick="runIntake()">Read ▶</button>
           </div>
           <div id="fin-draft" style="margin-top:12px"></div>
         </div>
@@ -272,9 +309,50 @@
 <script>
 const API="";
 let LAST_QUERY="";
+let VIEW="dash";
+let CID=parseInt(localStorage.getItem('precinct_cid')||'1',10)||1;
+let CAMPAIGNS=[];
 const pc={DEM:'DEM',REP:'REP',GRN:'GRN',LIB:'LIB'};
+const cidq=(sep)=> (sep||'?')+'campaign_id='+CID;
+
+async function loadCampaigns(){
+  try{
+    CAMPAIGNS=(await (await fetch(API+'/campaigns')).json()).campaigns||[];
+    if(!CAMPAIGNS.some(c=>c.id===CID)){CID=CAMPAIGNS.length?CAMPAIGNS[0].id:1;localStorage.setItem('precinct_cid',CID);}
+    renderCampaignSel();
+  }catch(e){}
+}
+function renderCampaignSel(){
+  const s=document.getElementById('campsel');
+  s.innerHTML=CAMPAIGNS.map(c=>'<option value="'+c.id+'"'+(c.id===CID?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'<option value="__new">＋ New campaign…</option>';
+}
+async function switchCampaign(val){
+  if(val==='__new'){
+    const name=prompt('Name the new campaign:');
+    renderCampaignSel();
+    if(!name)return;
+    const c=await (await fetch(API+'/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,office_type:'other'})})).json();
+    CID=c.id;localStorage.setItem('precinct_cid',CID);
+    await loadCampaigns();
+    toast('Campaign created: '+name);
+  }else{
+    CID=parseInt(val,10);localStorage.setItem('precinct_cid',CID);
+    const c=CAMPAIGNS.find(x=>x.id===CID);
+    toast('Switched to '+(c?c.name:('campaign #'+CID)));
+  }
+  refreshView();
+}
+function refreshView(){
+  if(VIEW==='lists') loadLists();
+  if(VIEW==='finance') loadFinance();
+  if(VIEW==='field') loadFieldPicker();
+  if(VIEW==='fundraise') loadFundraising();
+  if(VIEW==='petitions') loadPetitions();
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function show(v){
+  VIEW=v;
   document.querySelectorAll('#nav .nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));
   ['dash','target','lists','field','finance','fundraise','petitions'].forEach(x=>document.getElementById('v-'+x).classList.toggle('hide',x!==v));
   document.getElementById('vtitle').textContent={dash:'Dashboard',target:'Targeting',lists:'Lists & turf',field:'Field ops',finance:'Finance',fundraise:'Fundraising',petitions:'Petitions'}[v];
@@ -288,7 +366,9 @@ document.getElementById('nav').addEventListener('click',e=>{const n=e.target.clo
 function ex(t){document.getElementById('q').value=t;show('target');runTarget();}
 
 async function boot(){
+  document.getElementById('kpis').innerHTML='<div class="kpi skel"><b>000</b><small>loading</small></div>'.repeat(5);
   try{
+    await loadCampaigns();
     const h=await (await fetch(API+'/health')).json();
     const isSample=h.data_provenance==='illustrative';
     const b=document.getElementById('databadge');
@@ -328,7 +408,8 @@ function bars(p,n,max){const cls=pc[p]?('p-'+p):'p-NPA';
 
 async function runTarget(){
   const q=document.getElementById('q').value.trim();if(!q)return;LAST_QUERY=q;
-  const r=await fetch(API+'/target',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,limit:200})});
+  const btn=document.getElementById('tbtn'); if(btn){btn.disabled=true;btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Targeting…';}
+  const r=await fetch(API+'/target',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,limit:200})}).finally(()=>{if(btn){btn.disabled=false;btn.innerHTML='Target ▶';}});
   const u=document.getElementById('understood');
   if(!r.ok){u.innerHTML='<span class="warnrow">Bad query ('+r.status+').</span>';return;}
   const d=await r.json();
@@ -349,7 +430,7 @@ function row(r){const cls=pc[r.party]?('p-'+r.party):'p-NPA';
     <td>${r.contactable?'✓':'—'}</td></tr>`;}
 
 async function openVoter(id){
-  const v=await (await fetch(API+'/voter/'+id)).json();
+  const v=await (await fetch(API+'/voter/'+id+cidq())).json();
   const cls=pc[v.party]?('p-'+v.party):'p-NPA';
   const hist=(v.voting_history||[]).slice().reverse().map(h=>`<div class="ev"><span class="dot"></span><span>${h.date} · ${h.type} · <span class="muted">${h.method.replace(/_/g,' ')}</span></span></div>`).join('')||'<div class="muted">No voting history on file.</div>';
   document.getElementById('dcontent').innerHTML=`
@@ -364,6 +445,9 @@ async function openVoter(id){
       <div class="kv"><span>Registered</span><span>${v.registration_date||'—'}</span></div>
       <div class="kv"><span>Turnout ◈</span><span>${Math.round(v.turnout_score*100)}%</span></div>
       <div class="kv"><span>Phone / email</span><span style="text-align:right">${v.phone||'—'}<br>${v.email||'—'}</span></div>
+      <h3 style="margin:16px 0 4px;font-size:14px">Supporter CRM <span class="muted" style="font-weight:400;font-size:11.5px">· tags live on this campaign</span></h3>
+      <div id="dtags">${tagChips(v.voter_id, v.tags||[])}</div>
+      <div class="tagbtns">${['support','lean','undecided','oppose','volunteer'].map(t=>`<button class="btn ghost" onclick="drawerTag('${v.voter_id}','${t}')">＋ ${t}</button>`).join('')}</div>
       <h3 style="margin:16px 0 4px;font-size:14px">Voting history</h3>
       <div class="tl">${hist}</div>
       <div class="legend">◈ derived by Precinct. Other fields map straight from the state extract (here: illustrative sample).</div>
@@ -372,18 +456,31 @@ async function openVoter(id){
   document.getElementById('scrim').classList.add('open');
 }
 function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');}
+function tagChips(vid,tags){
+  return tags.length ? tags.map(t=>`<span class="tagchip">${esc(t)}<b title="remove" onclick="drawerUntag('${vid}','${esc(t)}')">×</b></span>`).join('') : '<span class="muted" style="font-size:12.5px">No tags yet — tag this voter below.</span>';
+}
+async function drawerTag(vid,tag){
+  const r=await (await fetch(API+'/voter/'+vid+'/tag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:tag,campaign_id:CID})})).json();
+  const el=document.getElementById('dtags'); if(el) el.innerHTML=tagChips(vid,r.tags||[]);
+  toast('Tagged: '+tag);
+}
+async function drawerUntag(vid,tag){
+  const r=await (await fetch(API+'/voter/'+vid+'/tag?tag='+encodeURIComponent(tag)+cidq('&'),{method:'DELETE'})).json();
+  const el=document.getElementById('dtags'); if(el) el.innerHTML=tagChips(vid,r.tags||[]);
+  toast('Removed: '+tag);
+}
 
 async function saveList(){
   const name=prompt('Name this list / turf:', LAST_QUERY.slice(0,40));
   if(!name)return;
-  const r=await fetch(API+'/lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,query:LAST_QUERY})});
+  const r=await fetch(API+'/lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,query:LAST_QUERY,campaign_id:CID})});
   const d=await r.json();toast('Saved “'+d.name+'” — '+d.count+' voters');
 }
 async function loadLists(){
-  const d=await (await fetch(API+'/lists')).json();
+  const d=await (await fetch(API+'/lists'+cidq())).json();
   const w=document.getElementById('listwrap');
   document.getElementById('listview').classList.add('hide');
-  if(!d.lists.length){w.innerHTML='<div class="muted">No lists yet. Build one in Targeting → “Save as list”.</div>';return;}
+  if(!d.lists.length){w.innerHTML='<div class="empty"><span class="big">▤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a> → “Save as list”.</div>';return;}
   w.innerHTML=d.lists.map(l=>`<div class="card" style="cursor:pointer;margin:8px 0" onclick="openList(${l.id})">
      <div style="display:flex;justify-content:space-between"><b>${l.name}</b><span class="muted">${l.count} voters</span></div>
      <div class="muted" style="font-size:12.5px">“${l.query}” · ${l.created}</div></div>`).join('');
@@ -401,8 +498,8 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 
 async function loadFinance(){
   const office=document.getElementById('fin-office').value;
-  const rep=await (await fetch(API+'/finance/report?office='+office)).json();
-  const led=await (await fetch(API+'/finance/contributions')).json();
+  const rep=await (await fetch(API+'/finance/report?office='+office+cidq('&'))).json();
+  const led=await (await fetch(API+'/finance/contributions'+cidq())).json();
   document.getElementById('fin-kpis').innerHTML=kpi('$'+rep.totals.raised,'raised')+kpi('$'+rep.totals.spent,'spent')+kpi('$'+rep.totals.cash_on_hand,'cash on hand')+kpi(rep.contribution_count,'contributions');
   const flags=rep.compliance_flags||[];
   document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
@@ -412,25 +509,32 @@ async function loadFinance(){
 function _fld(l,v){return '<div><div style="font-size:11px;color:var(--muted)">'+l+'</div><div style="font-size:13.5px">'+(v||'—')+'</div></div>';}
 async function runIntake(){
   var text=document.getElementById('fin-intake').value.trim(); if(!text)return;
-  var d=await (await fetch(API+'/finance/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})).json();
-  window._lastDraft=d.draft;
-  document.getElementById('fin-draft').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="font-size:12px;color:var(--blue);margin-bottom:8px">AI read: '+((d.read||[]).join(' · ')||'nothing recognized')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+_fld('Donor',d.draft.donor_name)+_fld('Amount',d.draft.amount?('$'+d.draft.amount):'')+_fld('Date',d.draft.date)+_fld('Check #',d.draft.check_number)+_fld('Address',d.draft.address)+'</div>'+(d.warnings||[]).map(function(w){return '<div class="warnrow">⚠ '+w+'</div>';}).join('')+'<div style="margin-top:10px"><button class="btn ghost" onclick="commitDraft()">Looks right — add to ledger</button></div></div>';
+  var btn=document.getElementById('fin-readbtn'); btn.disabled=true; btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Reading…';
+  document.getElementById('fin-draft').innerHTML='<div class="muted" style="font-size:13px"><span class="spin"></span> Claude is reading the document…</div>';
+  try{
+    var d=await (await fetch(API+'/finance/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})).json();
+    window._lastDraft=d.draft;
+    var pill = d.method==='claude' ? '<span class="ai-pill">✦ Read by Claude</span>' : '<span class="rule-pill">rule-based read · offline fallback</span>';
+    document.getElementById('fin-draft').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+pill+'<span style="font-size:12px;color:var(--blue)">'+((d.read||[]).join(' · ')||'nothing recognized')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+_fld('Donor',d.draft.donor_name)+_fld('Amount',d.draft.amount?('$'+d.draft.amount):'')+_fld('Date',d.draft.date)+_fld('Check #',d.draft.check_number)+_fld('Address',d.draft.address)+'</div>'+(d.warnings||[]).map(function(w){return '<div class="warnrow">⚠ '+w+'</div>';}).join('')+'<div style="margin-top:10px"><button class="btn ghost" onclick="commitDraft()">Looks right — add to ledger</button></div></div>';
+  }catch(e){
+    document.getElementById('fin-draft').innerHTML='<div class="warnrow">⚠ Could not read that — try again.</div>';
+  }finally{ btn.disabled=false; btn.innerHTML='Read ▶'; }
 }
 async function commitDraft(){
   var dr=window._lastDraft; if(!dr||!dr.amount){alert('Need at least an amount.');return;}
   var iso='2026-01-01'; if(dr.date){var p=dr.date.split('/'); if(p.length===3){var y=p[2].length===2?('20'+p[2]):p[2]; iso=y+'-'+('0'+p[0]).slice(-2)+'-'+('0'+p[1]).slice(-2);}}
-  await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||''})});
+  await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||'',campaign_id:CID})});
   document.getElementById('fin-intake').value=''; document.getElementById('fin-draft').innerHTML='<div style="color:var(--good);font-size:13px">✓ Added to ledger after your review.</div>'; loadFinance();
 }
 async function loadFieldPicker(){
-  const d=await (await fetch(API+'/lists?campaign_id=1')).json();
+  const d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('walkview').classList.add('hide');
   const w=document.getElementById('field-picker');
-  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="cursor:pointer;margin:8px 0" onclick="openWalk('+l.id+')"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div class="muted" style="font-size:12.5px">open walk sheet →</div></div>';}).join('') : '<div class="muted">No lists yet. Build one in Targeting → “Save as list”, then walk it here.</div>';
+  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="cursor:pointer;margin:8px 0" onclick="openWalk('+l.id+')"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div class="muted" style="font-size:12.5px">open walk sheet →</div></div>';}).join('') : '<div class="empty"><span class="big">➤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a>, then walk it here.</div>';
 }
 var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
 async function openWalk(lid){
-  const d=await (await fetch(API+'/walklist/'+lid+'?campaign_id=1')).json();
+  const d=await (await fetch(API+'/walklist/'+lid+cidq())).json();
   const v=document.getElementById('walkview'); v.classList.remove('hide');
   var html='<h3>'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3>';
   d.streets.forEach(function(s){
@@ -443,18 +547,18 @@ async function openWalk(lid){
   v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
 }
 async function canvass(vid,tag){
-  const r=await (await fetch(API+'/voter/'+vid+'/tag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:tag,campaign_id:1})})).json();
+  const r=await (await fetch(API+'/voter/'+vid+'/tag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:tag,campaign_id:CID})})).json();
   var el=document.getElementById('tags-'+vid); if(el) el.textContent=(r.tags||[]).join(', ');
   toast('Logged: '+tag);
 }
 async function loadFundraising(){
   var office=document.getElementById('fund-office').value;
-  var d=await (await fetch(API+'/fundraising/report?office='+office+'&campaign_id=1')).json();
+  var d=await (await fetch(API+'/fundraising/report?office='+office+cidq('&'))).json();
   document.getElementById('fund-list').innerHTML='<table><thead><tr><th>Donor</th><th>Given total</th><th>Given (general)</th><th>Room to give ◈</th><th>Status</th></tr></thead><tbody>'+
     d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td>$'+x.given_total+'</td><td>$'+x.given_general+'</td><td style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':'$'+x.room_general)+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
 }
 async function loadPetitions(){
-  var d=await (await fetch(API+'/lists?campaign_id=1')).json();
+  var d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('pet-sheet').innerHTML=''; document.getElementById('pet-sigresult').innerHTML='';
   document.getElementById('pet-picker').innerHTML= d.lists.length ? 'Pre-fill from: '+d.lists.map(function(l){return '<a onclick="openPetition('+l.id+')" style="color:var(--blue);cursor:pointer;border-bottom:1px dotted;margin-right:12px">'+l.name+'</a>';}).join('') : '<span class="muted">No lists yet — build one in Targeting first.</span>';
 }
@@ -471,6 +575,7 @@ async function validateSig(){
   else el.innerHTML='<span style="color:var(--rep)">✗ No match on the roll — signature may be invalid.</span>';
 }
 document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){closeDrawer();return;}
   if(e.key!=='Enter')return;
   var a=document.activeElement; if(!a)return;
   if(a.id==='q') runTarget();
