@@ -76,6 +76,17 @@ def parse(text: str, as_of: Optional[date] = None, low_propensity_threshold: flo
         county = mc.group(1).strip().title()
         preds.append(E.by_county(county)); filters.append(f"county = {county}")
 
+    for pat, kind, label in (
+        (r"\b(?:hd|house district|state house(?: district)?)\s*-?\s*(\d{1,3})\b", "house", "house district"),
+        (r"\b(?:sd|senate district|state senate(?: district)?)\s*-?\s*(\d{1,3})\b", "senate", "senate district"),
+        (r"\b(?:cd|congressional district|congress(?:ional)?(?: district)?)\s*-?\s*(\d{1,3})\b", "congressional", "congressional district"),
+    ):
+        md = re.search(pat, t)
+        if md:
+            num = md.group(1)
+            variants = {num, num.lstrip("0") or "0", num.zfill(3), num.zfill(2)}
+            preds.append(E.by_district(kind, *variants)); filters.append(f"{label} = {int(num)}")
+
     if " inactive" in t:
         preds.append(E.by_status(VoterStatus.INACTIVE)); filters.append("status = inactive")
     elif " active" in t:
