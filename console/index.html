@@ -357,7 +357,7 @@
   </div>
 </div>
 
-<div id="authwall" class="hide" style="position:fixed;inset:0;background:var(--navy);z-index:100;display:flex;align-items:center;justify-content:center">
+<div id="authwall" style="position:fixed;inset:0;background:var(--navy);z-index:10000;display:none;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;padding:28px;width:360px;max-width:92vw">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="width:26px;height:26px;border-radius:7px;background:var(--blue);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px">▚</span><b style="font-family:var(--display);font-size:17px">Precinct</b></div>
     <div class="sub" style="margin:0 0 12px">Sign in to your campaign workspace.</div>
@@ -475,7 +475,7 @@ async function authGo(){
     }
     var r=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,password:pw})});
     if(!r.ok){err.textContent=((await r.json()).detail)||'sign-in failed';return;}
-    document.getElementById('authwall').classList.add('hide');
+    document.getElementById('authwall').style.display='none';
     toast('Welcome back');
     boot();
   }catch(e){err.textContent='network error — try again';}
@@ -483,7 +483,7 @@ async function authGo(){
 async function authCheck(){
   try{
     var r=await fetch(API+'/auth/me');
-    if(r.status===401){document.getElementById('authwall').classList.remove('hide');return false;}
+    if(r.status===401){document.getElementById('authwall').style.display='flex';return false;}
     var me=await r.json();
     if(me.user){var el=document.getElementById('userchip'); el.classList.remove('hide'); el.innerHTML=esc(me.user.name)+' · <a style="cursor:pointer;color:var(--blue)" onclick="doLogout()">sign out</a>';
       if(me.user.role==='admin') document.getElementById('admincard').classList.remove('hide');}
