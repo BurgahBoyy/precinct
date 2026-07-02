@@ -99,11 +99,12 @@ def rephrase_query(query: str) -> str | None:
         client = anthropic.Anthropic(api_key=config.get_api_key())
         msg = client.messages.create(
             model=config.CLAUDE_MODEL, max_tokens=80,
-            system=("Rewrite the user's voter-targeting request into this exact grammar, keeping ONLY constraints they stated: "
-                    "'[low-propensity] [PARTY] [men|women] [under N|over N|N-M] in [County] county [who voted by mail] [who skipped 2022] [active]'. "
-                    "PARTY is one of: Democratic, Republican, NPA, Green, Libertarian. "
-                    "Florida county names only. Return ONLY the rewritten query, no prose. "
-                    "If it is not a voter-targeting request, return exactly: NO"),
+            system=("Rewrite the user's voter-targeting request as ONE plain line in the style of these examples: "
+                    "'Republican men under 40 in Duval county' | 'low-propensity Democratic women over 50 in Orange county who voted by mail' | "
+                    "'NPA voters 30-45 who voted by mail' | 'active Democrats in Miami-Dade who skipped 2022'. "
+                    "Include ONLY constraints the user actually stated — never add low-propensity, active, or anything they didn't say. "
+                    "Party words: Democratic, Republican, NPA, Green, Libertarian ('red'=Republican, 'blue'=Democratic). "
+                    "No brackets, no quotes, no prose — just the query line. If it is not a voter-targeting request, return exactly: NO"),
             messages=[{"role": "user", "content": query[:300]}],
         )
         out = msg.content[0].text.strip().strip('"')
