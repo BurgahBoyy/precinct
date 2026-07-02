@@ -230,6 +230,16 @@
           <div class="sub">The audit trail — every write in this campaign, timestamped.</div>
           <div id="activity" class="muted" style="font-size:12.5px">Nothing yet.</div>
         </div>
+        <div class="card hide" id="admincard">
+          <h3>Load the real Florida voter file <span class="badge sample" style="vertical-align:2px">admin</span></h3>
+          <div class="sub">Drop the official registration extract zip (county or full). Optional: the voting-history zip. Swaps the sample voters live; the badge flips to "Real data".</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <input type="file" id="fl-reg" accept=".zip" style="font-size:12.5px" />
+            <input type="file" id="fl-hist" accept=".zip" style="font-size:12.5px" />
+            <button class="btn" id="fl-go" onclick="loadVoters()">Load voters</button>
+          </div>
+          <div id="fl-status" class="sub" style="margin-top:10px"></div>
+        </div>
       </section>
 
       <!-- TARGETING -->
@@ -473,11 +483,27 @@ async function authCheck(){
     var r=await fetch(API+'/auth/me');
     if(r.status===401){document.getElementById('authwall').classList.remove('hide');return false;}
     var me=await r.json();
-    if(me.user){var el=document.getElementById('userchip'); el.classList.remove('hide'); el.innerHTML=esc(me.user.name)+' · <a style="cursor:pointer;color:var(--blue)" onclick="doLogout()">sign out</a>';}
+    if(me.user){var el=document.getElementById('userchip'); el.classList.remove('hide'); el.innerHTML=esc(me.user.name)+' · <a style="cursor:pointer;color:var(--blue)" onclick="doLogout()">sign out</a>';
+      if(me.user.role==='admin') document.getElementById('admincard').classList.remove('hide');}
     return true;
   }catch(e){return true;}
 }
 async function doLogout(){await fetch(API+'/auth/logout',{method:'POST'});location.reload();}
+async function loadVoters(){
+  var reg=document.getElementById('fl-reg').files[0];
+  if(!reg){toast('Pick the registration zip first');return;}
+  var btn=document.getElementById('fl-go'); btn.disabled=true; btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Loading…';
+  document.getElementById('fl-status').textContent='Uploading and parsing — big files take a minute…';
+  try{
+    var fd=new FormData(); fd.append('registration',reg);
+    var h=document.getElementById('fl-hist').files[0]; if(h) fd.append('history',h);
+    var r=await fetch(API+'/admin/load-voters',{method:'POST',body:fd});
+    var d=await r.json();
+    if(!r.ok){document.getElementById('fl-status').innerHTML='<span class="warnrow">⚠ '+esc(d.detail||'failed')+'</span>';}
+    else{document.getElementById('fl-status').textContent='Loaded '+d.loaded+' voters ('+d.provenance+'). Refreshing…'; setTimeout(function(){location.reload();},1200);}
+  }catch(e){document.getElementById('fl-status').innerHTML='<span class="warnrow">⚠ upload failed — try again</span>';}
+  btn.disabled=false; btn.innerHTML='Load voters';
+}
 
 async function boot(){
   if(!await authCheck())return;
