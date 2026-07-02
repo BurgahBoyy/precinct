@@ -192,6 +192,23 @@ def voters(limit: int = 25) -> dict:
             "results": [voter_row(v) for v in STORE.all()[:limit]]}
 
 
+@app.get("/voters/search")
+def voters_search(q: str, limit: int = 50) -> dict:
+    qs = q.strip().lower()
+    if len(qs) < 2:
+        raise HTTPException(status_code=422, detail="query too short (2+ characters)")
+    limit = max(1, min(limit, 200))
+    out = []
+    for v in STORE.all():
+        hay = v.voter_id.lower() if v.protected else " ".join(
+            [v.full_name or "", v.residence.one_line() or "", v.voter_id, v.county or ""]).lower()
+        if qs in hay:
+            out.append(voter_row(v))
+            if len(out) >= limit:
+                break
+    return {"query": q, "count": len(out), "results": out, "data_provenance": STORE.provenance}
+
+
 @app.get("/voter/{voter_id}")
 def voter(voter_id: str, campaign_id: int = DEFAULT_CID) -> dict:
     v = BY_ID.get(voter_id)
@@ -252,6 +269,7 @@ def campaigns_list() -> dict:
 @app.post("/campaigns")
 def campaigns_create(req: CampaignRequest) -> dict:
     cid = DB.create_campaign(req.name, req.office_type)
+    DB.log_action(cid, "campaign.created", req.name)
     return DB.get_campaign(cid)
 
 
@@ -261,12 +279,14 @@ def tag_voter(voter_id: str, req: TagRequest) -> dict:
     if voter_id not in BY_ID:
         raise HTTPException(status_code=404, detail="voter not found")
     DB.add_tag(req.campaign_id, voter_id, req.tag)
+    DB.log_action(req.campaign_id, "voter.tagged", f"{voter_id} +{req.tag}")
     return {"voter_id": voter_id, "tags": DB.tags_for_voter(req.campaign_id, voter_id)}
 
 
 @app.delete("/voter/{voter_id}/tag")
 def untag_voter(voter_id: str, tag: str, campaign_id: int = DEFAULT_CID) -> dict:
     DB.remove_tag(campaign_id, voter_id, tag)
+    DB.log_action(campaign_id, "voter.untagged", f"{voter_id} -{tag}")
     return {"voter_id": voter_id, "tags": DB.tags_for_voter(campaign_id, voter_id)}
 
 
@@ -284,7 +304,7 @@ def supporters(campaign_id: int = DEFAULT_CID, tag: str = "support") -> dict:
 
 # ---------- field ops: walk list from a saved list ----------
 @app.get("/walklist/{list_id}")
-def walklist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
+def walklist(list_id: int, campaign_id: int = DEFAULT_CID, turfs: int = 1) -> dict:
     lst = DB.get_list(list_id)
     if not lst:
         raise HTTPException(status_code=404, detail="list not found")
@@ -299,8 +319,36 @@ def walklist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
         streets.append({"street": st, "stops": [
             {**voter_row(x), "address": x.residence.one_line(), "tags": DB.tags_for_voter(campaign_id, x.voter_id)}
             for x in stops]})
+    turfs = max(1, min(int(turfs), 10))
+    bins = [{"turf": i + 1, "streets": [], "doors": 0} for i in range(turfs)]
+    for s in sorted(streets, key=lambda x: -len(x["stops"])):
+        b = min(bins, key=lambda b: b["doors"])
+        b["streets"].append(s)
+        b["doors"] += len(s["stops"])
+    for b in bins:
+        b["streets"].sort(key=lambda s: s["street"])
     return {"list_id": list_id, "name": lst["name"], "streets": streets,
+            "turfs": bins, "turf_count": turfs,
             "stop_count": sum(len(s["stops"]) for s in streets), "data_provenance": STORE.provenance}
+
+
+@app.get("/calllist/{list_id}")
+def calllist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
+    lst = DB.get_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="list not found")
+    rows = []
+    for vid in lst["voter_ids"]:
+        v = BY_ID.get(vid)
+        if v and v.phone and not v.protected:
+            rows.append({**voter_row(v), "phone": v.phone, "tags": DB.tags_for_voter(campaign_id, vid)})
+    return {"list_id": list_id, "name": lst["name"], "count": len(rows), "results": rows,
+            "data_provenance": STORE.provenance}
+
+
+@app.get("/audit")
+def audit(campaign_id: int = DEFAULT_CID, limit: int = 20) -> dict:
+    return {"events": DB.get_audit(campaign_id, limit)}
 
 
 # ---------- saved lists / turf (persisted) ----------
@@ -308,6 +356,7 @@ def walklist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
 def save_list(req: SaveListRequest) -> dict:
     _, matched = _run_query(req.query)
     lid = DB.save_list(req.campaign_id, req.name, req.query, [v.voter_id for v in matched])
+    DB.log_action(req.campaign_id, "list.saved", f"{req.name} ({len(matched)} voters)")
     return {"id": lid, "name": req.name, "count": len(matched)}
 
 
@@ -353,6 +402,7 @@ def add_contrib(req: ContributionRequest) -> dict:
     method = req.method if req.method in FIN.Method._value2member_map_ else "other"
     lid = DB.add_contribution(req.campaign_id, donor_name=req.donor_name, amount=str(req.amount), date=d.isoformat(),
                               phase=phase, method=method, address=req.address, check_number=req.check_number, provenance="entered")
+    DB.log_action(req.campaign_id, "finance.contribution", f"{req.donor_name} ${req.amount}")
     return {"id": lid, "donor_name": req.donor_name, "amount": str(req.amount)}
 
 
