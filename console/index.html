@@ -327,6 +327,16 @@
           <div class="sub">Pick a saved list — Precinct cuts it into a street-ordered walk sheet. Tap a door to log the result; it saves to the campaign (no barcode scanners).</div>
           <div id="field-picker"></div>
         </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <h3 style="margin:0">Ballot chase <span class="muted" style="font-weight:400;font-size:11.5px">· the daily heartbeat</span></h3>
+            <button class="btn ghost no-print" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV('chase-list.csv',window._lastChaseRows)">⬇ CSV</button>
+          </div>
+          <div class="sub">Your supporters and leaners whose mail ballots are OUT but not returned — a banked vote can't be lost on election day.</div>
+          <div id="chase-kpis" class="kpis"></div>
+          <div id="chase-list" style="margin-top:12px"></div>
+          <div class="legend" id="chase-note"></div>
+        </div>
         <div id="walkview" class="card hide"></div>
       </section>
 
@@ -792,7 +802,25 @@ async function commitDraft(){
   await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||'',campaign_id:CID})});
   document.getElementById('fin-intake').value=''; document.getElementById('fin-draft').innerHTML='<div style="color:var(--good);font-size:13px">✓ Added to ledger after your review.</div>'; loadFinance();
 }
+async function loadChase(){
+  try{
+    var s=await (await fetch(API+'/ballots/summary'+cidq())).json();
+    var kel=document.getElementById('chase-kpis');
+    if(!s.election){kel.innerHTML='';document.getElementById('chase-list').innerHTML='<div class="empty"><span class="big">🗳</span>No ballot data loaded for this season yet.<br/>Daily absentee files light this up the moment they load.</div>';document.getElementById('chase-note').textContent='';window._lastChaseRows=[];return;}
+    kel.innerHTML=kpi(s.supporters.banked,'banked (yours)')+kpi(s.supporters.outstanding,'outstanding (yours)')+kpi(s.overall.banked,'banked (everyone)')+kpi(s.overall.outstanding,'outstanding (everyone)');
+    animateKpis(kel);
+    var d=await (await fetch(API+'/ballots/chase'+cidq())).json();
+    window._lastChaseRows=(d.results||[]).map(function(x){return {name:x.name,phone:x.phone,address:x.address,party:x.party,requested:x.ballot_requested,sent:x.ballot_sent,tags:(x.tags||[]).join('; ')};});
+    var CH=['knocked','called','texted','no answer'];
+    document.getElementById('chase-list').innerHTML=(d.results||[]).length? d.results.map(function(x){
+      var cls=pc[x.party]?('p-'+x.party):'p-NPA';
+      return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:12.5px">'+(x.phone||'')+'</span><div class="muted" style="font-size:12px">'+(x.address||'')+'</div><div style="font-size:12px;color:var(--warn);margin-top:2px">ballot requested <span class="mono">'+(x.ballot_requested||'—')+'</span> · sent <span class="mono">'+(x.ballot_sent||'—')+'</span> · <b>NOT RETURNED</b></div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CH.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+    }).join('') : '<div class="empty"><span class="big">✓</span>Every tagged supporter with a ballot out has returned it. The bank is full.</div>';
+    document.getElementById('chase-note').textContent='Election: '+s.election+' · data: '+s.provenance+(s.provenance==='illustrative'?' (sample season — real daily files replace this)':'');
+  }catch(e){}
+}
 async function loadFieldPicker(){
+  loadChase();
   const d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('walkview').classList.add('hide');
   const w=document.getElementById('field-picker');
