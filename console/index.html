@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#14213d" />
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%2314213d"/><rect x="18" y="18" width="28" height="28" rx="6" fill="%232563eb"/><rect x="54" y="18" width="28" height="28" rx="6" fill="%233b82f6" opacity=".55"/><rect x="18" y="54" width="28" height="28" rx="6" fill="%233b82f6" opacity=".55"/><rect x="54" y="54" width="28" height="28" rx="6" fill="%23fff" opacity=".9"/></svg>' />
 <title>Precinct — Campaign OS</title>
+<meta property="og:title" content="Precinct — the AI-native campaign OS" />
+<meta property="og:description" content="Target voters in plain English. Walk sheets on a map. Claude reads the paperwork. Built to replace the tools campaigns hate." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Precinct — the AI-native campaign OS" />
+<meta name="twitter:description" content="Target voters in plain English. Walk sheets on a map. Claude reads the paperwork." />
+<meta name="twitter:image" content="/og.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -169,6 +177,26 @@
     .content{padding:0;max-width:100%}
     .card{border:0;box-shadow:none;margin:0 0 12px;page-break-inside:avoid}
   }
+  .bar>span{transition:width .7s cubic-bezier(.2,.8,.2,1)}
+  .toast.tour{font-size:15px;padding:14px 22px;max-width:82vw;text-align:center;line-height:1.45}
+  [data-theme="dark"]{--bg:#0b1220;--card:#121b2e;--ink:#e6ebf5;--muted:#93a3bb;--line:#22304f}
+  [data-theme="dark"] .top{background:#0f1830;border-bottom-color:#22304f}
+  [data-theme="dark"] .side{background:#0a101d;border-right-color:#16213a}
+  [data-theme="dark"] .btn.ghost{background:transparent;border-color:#2b3a5e;color:var(--ink)}
+  [data-theme="dark"] .btn.ghost:hover{background:#1e2a4a}
+  [data-theme="dark"] input,[data-theme="dark"] select{background:#0f1830;color:var(--ink);border-color:#2b3a5e}
+  [data-theme="dark"] tbody tr:hover{background:#16213a}
+  [data-theme="dark"] .bar{background:#1a2440}
+  [data-theme="dark"] .chip{background:#1b2947;color:#b9c8f5}
+  [data-theme="dark"] .campsel{background:#0f1830;color:var(--ink);border-color:#2b3a5e}
+  [data-theme="dark"] .drawer{background:#121b2e}
+  [data-theme="dark"] .dhead{background:#121b2e}
+  [data-theme="dark"] .kpi{background:#121b2e}
+  [data-theme="dark"] .badge.sample{background:#2a1f10;border-color:#7c5210}
+  [data-theme="dark"] .banner{background:#231a0e;border-color:#5f430f}
+  [data-theme="dark"] .empty .big{opacity:.7}
+  [data-theme="dark"] .skel{background:#1a2440}
+  [data-theme="dark"] .tagchip{background:#0f2a22;color:#7ee0bb;border-color:#1d5c45}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -192,6 +220,8 @@
     <div class="top">
       <h1 id="vtitle">Dashboard</h1>
       <div class="topright">
+        <button class="btn ghost no-print" onclick="runTour()" title="Watch Precinct demo itself" style="padding:8px 12px;font-size:12.5px">▶ 60-sec tour</button>
+        <button class="btn ghost no-print" onclick="toggleTheme()" title="Light / dark" style="padding:8px 11px;font-size:13px">◐</button>
         <span id="userchip" class="badge hide" style="background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe"></span>
         <select id="campsel" class="campsel" onchange="switchCampaign(this.value)" title="Campaign"></select>
         <span id="databadge" class="badge sample">checking…</span>
@@ -202,7 +232,11 @@
 
       <!-- DASHBOARD -->
       <section id="v-dash">
-        <div class="kpis" id="kpis"></div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div id="flmap" style="height:290px"></div>
+          <div class="legend" style="padding:9px 16px;margin:0;border-top:1px solid var(--line)">The voter universe by county — bubbles scale with registered voters ◈ derived from the loaded records.</div>
+        </div>
+        <div class="kpis" id="kpis" style="margin-top:16px"></div>
         <div class="card" style="margin-top:16px">
           <h3>Registered voters by party</h3>
           <div class="sub">Derived — counts computed from the loaded records.</div>
@@ -432,6 +466,7 @@ async function loadPulse(){
     var res=await Promise.all([fetch(API+'/tags'+cidq()).then(function(r){return r.json();}),fetch(API+'/lists'+cidq()).then(function(r){return r.json();}),fetch(API+'/finance/report?office=other'+cidq('&')).then(function(r){return r.json();})]);
     var t=res[0].counts||{}; var doors=Object.keys(t).reduce(function(a,k){return a+t[k];},0);
     document.getElementById('pulse').innerHTML=kpi(t.support||0,'supporters')+kpi(t.lean||0,'leaning')+kpi(t.undecided||0,'undecided')+kpi(doors,'doors tagged')+kpi((res[1].lists||[]).length,'lists / turfs')+kpi(fmt$(res[2].totals.raised),'raised');
+    animateKpis(document.getElementById('pulse'));
     var ev=await fetch(API+'/audit'+cidq()).then(function(r){return r.json();});
     var el=document.getElementById('activity');
     if(el) el.innerHTML=(ev.events||[]).length?ev.events.map(function(e){return '<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)"><span class="mono" style="color:var(--muted);font-size:11px;white-space:nowrap">'+e.created.slice(5,16).replace('T',' ')+'</span><span><b style="font-weight:600">'+esc(e.action)+'</b> '+esc(e.detail||'')+'</span></div>';}).join(''):'Nothing yet — actions appear here as the team works.';
@@ -463,6 +498,77 @@ function show(v){
 document.getElementById('nav').addEventListener('click',e=>{const n=e.target.closest('.nav');if(n)show(n.dataset.v);});
 function ex(t){document.getElementById('q').value=t;show('target');runTarget();}
 
+(function(){var th=localStorage.getItem('precinct_theme');if(th==='dark')document.documentElement.dataset.theme='dark';})();
+function toggleTheme(){
+  var d=document.documentElement.dataset.theme==='dark';
+  if(d){delete document.documentElement.dataset.theme;localStorage.setItem('precinct_theme','light');}
+  else{document.documentElement.dataset.theme='dark';localStorage.setItem('precinct_theme','dark');}
+  if(window._flmap){try{window._flmap.remove();}catch(e){} window._flmap=null; if(window._flcounts) renderFlMap(window._flcounts);}
+  toast(d?'Light mode':'Dark cockpit');
+}
+var FL_ANCHORS={"Miami-Dade":[25.774,-80.194],"Broward":[26.19,-80.36],"Palm Beach":[26.71,-80.28],"Orange":[28.538,-81.379],"Duval":[30.332,-81.656],"Hillsborough":[27.951,-82.457],"Pinellas":[27.876,-82.638],"Lee":[26.55,-81.95],"Polk":[27.95,-81.7],"Brevard":[28.3,-80.7],"Volusia":[29.06,-81.18],"Seminole":[28.72,-81.24],"Pasco":[28.3,-82.45],"Sarasota":[27.18,-82.4],"Manatee":[27.48,-82.42],"Marion":[29.21,-82.06],"Collier":[26.1,-81.72],"Leon":[30.45,-84.28],"Alachua":[29.68,-82.36],"St. Johns":[29.9,-81.4],"Escambia":[30.5,-87.25],"Okaloosa":[30.6,-86.6],"Lake":[28.76,-81.72],"Osceola":[28.06,-81.15]};
+function renderFlMap(counts){
+  var el=document.getElementById('flmap'); if(!el||typeof L==='undefined'){if(el)el.parentElement.style.display='none';return;}
+  window._flcounts=counts;
+  try{
+    if(window._flmap){window._flmap.remove();window._flmap=null;}
+    var dark=document.documentElement.dataset.theme==='dark';
+    var m=L.map('flmap',{scrollWheelZoom:false,zoomControl:false}); window._flmap=m;
+    L.tileLayer('https://basemaps.cartocdn.com/'+(dark?'dark_all':'light_all')+'/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap · © CARTO'}).addTo(m);
+    var pts=[],max=1; Object.keys(counts).forEach(function(k){max=Math.max(max,counts[k]);});
+    Object.keys(counts).forEach(function(k){
+      var a=FL_ANCHORS[k]; if(!a) return;
+      pts.push(a);
+      var r=8+22*Math.sqrt(counts[k]/max);
+      L.circleMarker(a,{radius:r,color:'#fff',weight:1.5,fillColor:'#2563eb',fillOpacity:.62})
+        .bindPopup('<b>'+esc(k)+'</b><br>'+counts[k].toLocaleString()+' voters').addTo(m);
+    });
+    if(pts.length) m.fitBounds(pts,{padding:[36,36]}); else m.setView([27.8,-81.7],6);
+  }catch(e){el.parentElement.style.display='none';}
+}
+function animateKpis(el){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.querySelectorAll('.kpi b').forEach(function(b){
+    var raw=b.textContent.trim(); var money=raw.charAt(0)==='$';
+    var n=parseFloat(raw.replace(/[$,]/g,'')); if(isNaN(n)||n<=0) return;
+    var t0=null, dur=650;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min(1,(ts-t0)/dur); p=1-Math.pow(1-p,3);
+      var v=Math.round(n*p); b.textContent=(money?'$':'')+v.toLocaleString(); if(p<1)requestAnimationFrame(step); else b.textContent=raw; }
+    requestAnimationFrame(step);
+  });
+}
+function sweepBars(el){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.querySelectorAll('.bar>span').forEach(function(sp){var w=sp.style.width;sp.style.width='0%';requestAnimationFrame(function(){requestAnimationFrame(function(){sp.style.width=w;});});});
+}
+function tourToast(m,ms){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show','tour');setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.classList.remove('tour');},300);},ms-200);}
+function autotype(el,text){return new Promise(function(res){el.value='';el.focus();var i=0;var iv=setInterval(function(){el.value=text.slice(0,++i);if(i>=text.length){clearInterval(iv);res();}},26);});}
+async function runTour(){
+  if(window._touring) return; window._touring=true;
+  var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+  try{
+    show('dash'); window.scrollTo(0,0);
+    tourToast('This is Precinct — the AI-native campaign operating system. Watch it work.',3200); await sleep(3400);
+    show('target');
+    tourToast('You don\u2019t build queries. You just say what you want…',2600);
+    await autotype(document.getElementById('q'),'Republican men under 40 in Duval county'); await sleep(400);
+    await runTarget();
+    tourToast('…and it shows exactly how it understood you. No silent misreads.',3200); await sleep(3600);
+    show('field'); await sleep(500); await openWalk(1,3);
+    tourToast('Any list becomes a walk sheet — split into balanced turfs, on a map.',3600); await sleep(4000);
+    show('finance'); window.scrollTo(0,0);
+    tourToast('Now the part nobody else has: hand Claude the messy paperwork…',2800);
+    await autotype(document.getElementById('fin-intake'),'check from carmen ruiz, five hundred even, no 2210, 6/25/26, 12 vista ct orlando');
+    runIntake();
+    await sleep(6500);
+    tourToast('Read, structured, compliance-checked — a human approves before anything files.',3400); await sleep(3600);
+    show('fundraise'); await sleep(600);
+    tourToast('It already knows who\u2019s maxed out under FL law — and who you can still ask.',3200); await sleep(3400);
+    show('dash'); window.scrollTo(0,0);
+    tourToast('Sample data today. The day the real Florida file loads: 13 million voters, same tool. That\u2019s Precinct.',4200); await sleep(4200);
+  }catch(e){}
+  window._touring=false;
+}
 var AUTH_MODE='login';
 function authToggle(){AUTH_MODE=AUTH_MODE==='login'?'register':'login';document.getElementById('a-name').classList.toggle('hide',AUTH_MODE==='login');document.getElementById('a-go').textContent=AUTH_MODE==='login'?'Sign in':'Create account';document.getElementById('a-tog').textContent=AUTH_MODE==='login'?'First time here? Create the admin account':'Have an account? Sign in';}
 async function authGo(){
@@ -526,6 +632,9 @@ async function boot(){
     renderDash(s);
     const c=await (await fetch(API+'/counties')).json();
     renderCounties(c.counties);
+    renderFlMap(c.counties);
+    animateKpis(document.getElementById('v-dash'));
+    sweepBars(document.getElementById('v-dash'));
     loadPulse();
     runTarget();
   }catch(e){
