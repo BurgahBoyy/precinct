@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --navy:#0d1526; --navy2:#16213a; --blue:#2563eb; --blue-d:#1e40af;
@@ -162,7 +164,7 @@
     .kpis{grid-template-columns:repeat(2,1fr)}
   }
   @media print{
-    .side,.top,#banner,.search,.ex,.btn,.tagbtns,.scrim,.drawer,.toast{display:none!important}
+    .side,.top,#banner,.search,.ex,.btn,.tagbtns,.scrim,.drawer,.toast,.no-print,#walkmap{display:none!important}
     body{background:#fff}
     .content{padding:0;max-width:100%}
     .card{border:0;box-shadow:none;margin:0 0 12px;page-break-inside:avoid}
@@ -700,6 +702,7 @@ async function openWalk(lid,turfs){
   const v=document.getElementById('walkview'); v.classList.remove('hide');
   var sel='<select onchange="openWalk('+lid+',this.value)" style="padding:8px;border:1px solid var(--line);border-radius:9px;font-size:12.5px">'+[1,2,3,4,5].map(function(nn){return '<option value="'+nn+'"'+(nn===turfs?' selected':'')+'>'+(nn===1?'One turf':'Split into '+nn+' turfs')+'</option>';}).join('')+'</select>';
   var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+sel+'<button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
+  html+='<div id="walkmap" class="no-print" style="height:340px;border-radius:12px;margin:10px 0;border:1px solid var(--line)"></div><div class="legend no-print" style="margin:-4px 0 10px;border:0;padding:0">Pin positions: '+esc(d.positions||'')+' ◈</div>';
   d.turfs.forEach(function(t,ti){
     if(d.turf_count>1) html+='<div style="margin:14px 0 2px;padding:8px 12px;background:var(--navy);color:#fff;border-radius:9px;font-weight:600;font-size:13px'+(ti>0?';page-break-before:always':'')+'">Turf '+t.turf+' · '+t.doors+' doors · '+t.streets.length+' streets</div>';
     t.streets.forEach(function(s){
@@ -707,7 +710,26 @@ async function openWalk(lid,turfs){
       s.stops.forEach(function(x){html+=stopCard(x);});
     });
   });
-  v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
+  v.innerHTML=html; renderWalkMap(d); v.scrollIntoView({behavior:'smooth'});
+}
+function renderWalkMap(d){
+  var el=document.getElementById('walkmap'); if(!el) return;
+  if(typeof L==='undefined'){el.style.display='none';return;}
+  var pts=[]; var colors=['#2563eb','#dc2626','#059669','#b45309','#7c3aed'];
+  try{
+    if(window._walkmap){window._walkmap.remove();window._walkmap=null;}
+    var m=L.map('walkmap',{scrollWheelZoom:false}); window._walkmap=m;
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
+    d.turfs.forEach(function(t,ti){
+      t.streets.forEach(function(s){s.stops.forEach(function(x){
+        if(x.lat==null) return;
+        pts.push([x.lat,x.lng]);
+        L.circleMarker([x.lat,x.lng],{radius:7,color:'#fff',weight:1.5,fillColor:colors[ti%colors.length],fillOpacity:.92}).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.address)+(d.turf_count>1?('<br>Turf '+t.turf):'')).addTo(m);
+      });});
+    });
+    if(!pts.length){el.style.display='none';return;}
+    m.fitBounds(pts,{padding:[24,24]});
+  }catch(e){el.style.display='none';}
 }
 async function openCall(lid){
   const d=await (await fetch(API+'/calllist/'+lid+cidq())).json();
