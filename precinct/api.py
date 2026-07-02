@@ -8,9 +8,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from . import db as DB
@@ -23,6 +23,27 @@ from .store import VoterStore
 
 app = FastAPI(title="Precinct API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+from . import auth as AUTH  # noqa: E402
+
+
+@app.middleware("http")
+async def _auth_gate(request: Request, call_next):
+    if AUTH.enabled() and not AUTH.is_public(request.url.path):
+        user = AUTH.user_from_token(request.cookies.get(AUTH.COOKIE))
+        if not user:
+            return JSONResponse({"detail": "authentication required"}, status_code=401)
+        request.state.user = user
+    return await call_next(request)
+
+
+def _user(request: Request) -> dict | None:
+    return getattr(request.state, "user", None)
+
+
+def _require_member(request: Request, campaign_id: int):
+    if AUTH.enabled() and not AUTH.can_write(_user(request), campaign_id):
+        raise HTTPException(status_code=403, detail="not a member of this campaign")
 
 STORE: VoterStore = VoterStore.from_sample(n=400)
 UNIVERSE = E.election_universe(STORE.all(), types=(ElectionType.GENERAL,))
@@ -267,24 +288,30 @@ def campaigns_list() -> dict:
 
 
 @app.post("/campaigns")
-def campaigns_create(req: CampaignRequest) -> dict:
+def campaigns_create(req: CampaignRequest, request: Request) -> dict:
     cid = DB.create_campaign(req.name, req.office_type)
-    DB.log_action(cid, "campaign.created", req.name)
+    u = _user(request)
+    if u:
+        DB.add_membership(u["id"], cid, "owner")
+    DB.log_action(cid, "campaign.created", req.name + (f" by {u['email']}" if u else ""))
     return DB.get_campaign(cid)
 
 
 # ---------- supporter CRM / canvass tags ----------
 @app.post("/voter/{voter_id}/tag")
-def tag_voter(voter_id: str, req: TagRequest) -> dict:
+def tag_voter(voter_id: str, req: TagRequest, request: Request) -> dict:
     if voter_id not in BY_ID:
         raise HTTPException(status_code=404, detail="voter not found")
+    _require_member(request, req.campaign_id)
     DB.add_tag(req.campaign_id, voter_id, req.tag)
     DB.log_action(req.campaign_id, "voter.tagged", f"{voter_id} +{req.tag}")
     return {"voter_id": voter_id, "tags": DB.tags_for_voter(req.campaign_id, voter_id)}
 
 
 @app.delete("/voter/{voter_id}/tag")
-def untag_voter(voter_id: str, tag: str, campaign_id: int = DEFAULT_CID) -> dict:
+def untag_voter(voter_id: str, tag: str, request: Request = None, campaign_id: int = DEFAULT_CID) -> dict:
+    if request is not None:
+        _require_member(request, campaign_id)
     DB.remove_tag(campaign_id, voter_id, tag)
     DB.log_action(campaign_id, "voter.untagged", f"{voter_id} -{tag}")
     return {"voter_id": voter_id, "tags": DB.tags_for_voter(campaign_id, voter_id)}
@@ -353,7 +380,8 @@ def audit(campaign_id: int = DEFAULT_CID, limit: int = 20) -> dict:
 
 # ---------- saved lists / turf (persisted) ----------
 @app.post("/lists")
-def save_list(req: SaveListRequest) -> dict:
+def save_list(req: SaveListRequest, request: Request) -> dict:
+    _require_member(request, req.campaign_id)
     _, matched = _run_query(req.query)
     lid = DB.save_list(req.campaign_id, req.name, req.query, [v.voter_id for v in matched])
     DB.log_action(req.campaign_id, "list.saved", f"{req.name} ({len(matched)} voters)")
@@ -393,7 +421,8 @@ def finance_contribs(campaign_id: int = DEFAULT_CID) -> dict:
 
 
 @app.post("/finance/contributions")
-def add_contrib(req: ContributionRequest) -> dict:
+def add_contrib(req: ContributionRequest, request: Request) -> dict:
+    _require_member(request, req.campaign_id)
     try:
         d = date.fromisoformat(req.date)
     except ValueError:
@@ -411,6 +440,63 @@ def finance_report(office: str = "other", campaign_id: int = DEFAULT_CID) -> dic
     rep = FIN.generate_report(_contribs_for(campaign_id), _expenses_for(campaign_id), office)
     rep["data_provenance"] = "illustrative seed + entered"
     return rep
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=200)
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/auth/register")
+def auth_register(req: RegisterRequest) -> dict:
+    if not AUTH.enabled():
+        raise HTTPException(status_code=400, detail="auth is not enabled on this deployment")
+    if not AUTH.signup_open():
+        raise HTTPException(status_code=403, detail="signups are closed — ask the site admin for an account")
+    try:
+        u = AUTH.register(req.email, req.name, req.password)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    DB.log_action(0, "user.registered", f"{u['email']} ({u['role']})")
+    return {"registered": True, "email": u["email"], "role": u["role"]}
+
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest, response: Response) -> dict:
+    if not AUTH.enabled():
+        raise HTTPException(status_code=400, detail="auth is not enabled on this deployment")
+    token = AUTH.login(req.email, req.password)
+    if not token:
+        raise HTTPException(status_code=401, detail="wrong email or password")
+    import os as _os
+    response.set_cookie(AUTH.COOKIE, token, max_age=AUTH.SESSION_DAYS * 86400, httponly=True, samesite="lax",
+                        secure=_os.environ.get("PRECINCT_COOKIE_SECURE", "1") != "0")
+    u = DB.get_user_by_email(req.email.strip().lower())
+    DB.log_action(0, "user.login", u["email"])
+    return {"ok": True, "name": u["name"], "role": u["role"]}
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request, response: Response) -> dict:
+    AUTH.logout(request.cookies.get(AUTH.COOKIE))
+    response.delete_cookie(AUTH.COOKIE)
+    return {"ok": True}
+
+
+@app.get("/auth/me")
+def auth_me(request: Request) -> dict:
+    if not AUTH.enabled():
+        return {"auth": "disabled"}
+    u = AUTH.user_from_token(request.cookies.get(AUTH.COOKIE))
+    if not u:
+        raise HTTPException(status_code=401, detail="not signed in")
+    return {"auth": "enabled", "user": u, "memberships": DB.memberships_for_user(u["id"])}
 
 
 _FRONTEND = Path(__file__).resolve().parent.parent / "console" / "index.html"
