@@ -224,6 +224,11 @@
           </div>
           <div id="askout" style="margin-top:12px"></div>
         </div>
+        <div class="card">
+          <h3>Recent activity</h3>
+          <div class="sub">The audit trail — every write in this campaign, timestamped.</div>
+          <div id="activity" class="muted" style="font-size:12.5px">Nothing yet.</div>
+        </div>
       </section>
 
       <!-- TARGETING -->
@@ -238,6 +243,10 @@
             <a onclick="ex('Republican men under 40 in Duval county')">Republican men under 40 in Duval</a>
             <a onclick="ex('NPA voters 30-45 who voted by mail')">NPA 30–45 who voted by mail</a>
             <a onclick="ex('active Democrats in Miami-Dade who skipped 2022')">Dems in Miami-Dade who skipped 2022</a>
+          </div>
+          <div class="search" style="margin-top:12px">
+            <input id="vq" placeholder="…or look up a voter directly: name, street, or voter ID" />
+            <button class="btn ghost" onclick="voterSearch()">Find voter</button>
           </div>
           <div id="understood" style="margin-top:12px"></div>
         </div>
@@ -398,6 +407,9 @@ async function loadPulse(){
     var res=await Promise.all([fetch(API+'/tags'+cidq()).then(function(r){return r.json();}),fetch(API+'/lists'+cidq()).then(function(r){return r.json();}),fetch(API+'/finance/report?office=other'+cidq('&')).then(function(r){return r.json();})]);
     var t=res[0].counts||{}; var doors=Object.keys(t).reduce(function(a,k){return a+t[k];},0);
     document.getElementById('pulse').innerHTML=kpi(t.support||0,'supporters')+kpi(t.lean||0,'leaning')+kpi(t.undecided||0,'undecided')+kpi(doors,'doors tagged')+kpi((res[1].lists||[]).length,'lists / turfs')+kpi(fmt$(res[2].totals.raised),'raised');
+    var ev=await fetch(API+'/audit'+cidq()).then(function(r){return r.json();});
+    var el=document.getElementById('activity');
+    if(el) el.innerHTML=(ev.events||[]).length?ev.events.map(function(e){return '<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)"><span class="mono" style="color:var(--muted);font-size:11px;white-space:nowrap">'+e.created.slice(5,16).replace('T',' ')+'</span><span><b style="font-weight:600">'+esc(e.action)+'</b> '+esc(e.detail||'')+'</span></div>';}).join(''):'Nothing yet — actions appear here as the team works.';
   }catch(e){}
 }
 async function askPrecinct(){
@@ -482,6 +494,16 @@ async function runTarget(){
   tb.innerHTML=d.results.map(row).join('');
   document.getElementById('tresults').classList.remove('hide');
   document.getElementById('tcount').innerHTML=`<b class="mono">${d.total_matched}</b> voters matched · <span class="muted">data: ${d.data_provenance}</span>`;
+}
+async function voterSearch(){
+  var q=document.getElementById('vq').value.trim(); if(q.length<2){toast('Type at least 2 characters');return;}
+  var r=await fetch(API+'/voters/search?q='+encodeURIComponent(q)+'&limit=100');
+  if(!r.ok){toast('Search failed');return;}
+  var d=await r.json();
+  document.querySelector('#ttable tbody').innerHTML=d.results.map(row).join('');
+  document.getElementById('tresults').classList.remove('hide');
+  document.getElementById('understood').innerHTML='';
+  document.getElementById('tcount').innerHTML='<b class="mono">'+d.count+'</b> voters found for “'+esc(q)+'” · <span class="muted">direct lookup</span>';
 }
 function row(r){const cls=pc[r.party]?('p-'+r.party):'p-NPA';
   return `<tr onclick="openVoter('${r.voter_id}')">
@@ -595,20 +617,39 @@ async function loadFieldPicker(){
   const d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('walkview').classList.add('hide');
   const w=document.getElementById('field-picker');
-  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="cursor:pointer;margin:8px 0" onclick="openWalk('+l.id+')"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div class="muted" style="font-size:12.5px">open walk sheet →</div></div>';}).join('') : '<div class="empty"><span class="big">➤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a>, then walk it here.</div>';
+  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="margin:8px 0"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openWalk('+l.id+')">➤ Walk sheet</button><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openCall('+l.id+')">☎ Call sheet</button></div></div>';}).join('') : '<div class="empty"><span class="big">➤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a>, then walk it here.</div>';
 }
 var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
-async function openWalk(lid){
-  const d=await (await fetch(API+'/walklist/'+lid+cidq())).json();
-  window._lastWalkName=d.name+' walk sheet'; window._lastWalkRows=[]; d.streets.forEach(function(s){s.stops.forEach(function(x){window._lastWalkRows.push({street:s.street,name:x.name,party:x.party,address:x.address,tags:(x.tags||[]).join('; ')});});});
+function stopCard(x){
+  var cls=pc[x.party]?('p-'+x.party):'p-NPA';
+  return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span><div class="muted" style="font-size:12px">'+x.address+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CANVASS_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+}
+async function openWalk(lid,turfs){
+  turfs=parseInt(turfs||1,10);
+  const d=await (await fetch(API+'/walklist/'+lid+cidq()+'&turfs='+turfs)).json();
+  window._lastWalkName=d.name+' walk sheet'; window._lastWalkRows=[];
+  d.turfs.forEach(function(t){t.streets.forEach(function(s){s.stops.forEach(function(x){window._lastWalkRows.push({turf:t.turf,street:s.street,name:x.name,party:x.party,address:x.address,tags:(x.tags||[]).join('; ')});});});});
   const v=document.getElementById('walkview'); v.classList.remove('hide');
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
-  d.streets.forEach(function(s){
-    html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+s.street+'</div>';
-    s.stops.forEach(function(x){
-      var cls=pc[x.party]?('p-'+x.party):'p-NPA';
-      html+='<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span><div class="muted" style="font-size:12px">'+x.address+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CANVASS_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+  var sel='<select onchange="openWalk('+lid+',this.value)" style="padding:8px;border:1px solid var(--line);border-radius:9px;font-size:12.5px">'+[1,2,3,4,5].map(function(nn){return '<option value="'+nn+'"'+(nn===turfs?' selected':'')+'>'+(nn===1?'One turf':'Split into '+nn+' turfs')+'</option>';}).join('')+'</select>';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+sel+'<button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
+  d.turfs.forEach(function(t,ti){
+    if(d.turf_count>1) html+='<div style="margin:14px 0 2px;padding:8px 12px;background:var(--navy);color:#fff;border-radius:9px;font-weight:600;font-size:13px'+(ti>0?';page-break-before:always':'')+'">Turf '+t.turf+' · '+t.doors+' doors · '+t.streets.length+' streets</div>';
+    t.streets.forEach(function(s){
+      html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+s.street+'</div>';
+      s.stops.forEach(function(x){html+=stopCard(x);});
     });
+  });
+  v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
+}
+async function openCall(lid){
+  const d=await (await fetch(API+'/calllist/'+lid+cidq())).json();
+  window._lastCallName=d.name+' call sheet'; window._lastCallRows=d.results.map(function(x){return {name:x.name,phone:x.phone,party:x.party,county:x.county,precinct:x.precinct,tags:(x.tags||[]).join('; ')};});
+  const v=document.getElementById('walkview'); v.classList.remove('hide');
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">☎ '+d.name+' <span class="muted" style="font-size:13px">· '+d.count+' callable (have phones)</span></h3><span class="no-print"><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV((window._lastCallName||&quot;call-sheet&quot;)+&quot;.csv&quot;,window._lastCallRows)">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
+  var CALL_TAGS=['reached','no answer','voicemail','wrong number','support','lean','undecided','oppose'];
+  d.results.forEach(function(x){
+    var cls=pc[x.party]?('p-'+x.party):'p-NPA';
+    html+='<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:13px">'+x.phone+'</span><div class="muted" style="font-size:12px">'+x.county+' · precinct '+x.precinct+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CALL_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
   });
   v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
 }
@@ -648,6 +689,7 @@ document.addEventListener('keydown',function(e){
   if(a.id==='q') runTarget();
   else if(a.id==='fin-intake') runIntake();
   else if(a.id==='askq') askPrecinct();
+  else if(a.id==='vq') voterSearch();
   else if(a.id==='pet-sig') validateSig();
 });
 boot();
