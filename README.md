@@ -1,52 +1,46 @@
-# Precinct — codebase (v0.1)
+# Precinct — the AI-native campaign operating system
 
-AI-native campaign operating system. This is the working engine + API + console for
-**Module 1 (Voter Data Layer)** and **Module 2 (AI Targeting)** of the roadmap —
-built to displace WebElect. See the docs in the parent folder (`Product_Brief.md`,
-`Ground_Truth.md`, `Roadmap.md`, `Florida_Voter_Data_Access.md`).
+A campaign OS built from scratch for the way races are actually run: target voters in
+plain English, cut turf onto walk sheets and maps, run phone banks, chase outstanding
+mail ballots daily, keep the finance ledger compliance-checked — with Claude reading
+the messy paperwork and answering questions about your own campaign's numbers.
 
-## What works right now
-- **Canonical multi-state voter schema** (`precinct/schema.py`) — states map *into* it.
-- **Florida adapter** (`precinct/fl_adapter.py`) — parses the official FL "Voter Extract"
-  tab-delimited files, pinned field-for-field to the May 2026 layout (38 registration
-  fields + voting history + code tables).
-- **Pure targeting engine** (`precinct/engine.py`) — predicates, segmentation, and an
-  honest, dataset-relative **turnout score** (not a black box).
-- **Natural-language targeting** (`precinct/nl_targeting.py`) — type the target in plain
-  English; it always **reports back what it understood**. Rule-based today; a clear seam
-  (`llm_parse`) is where Claude plugs in later.
-- **Typed API** (`precinct/api.py`) — FastAPI; bad input → 422; every value labelled.
-- **Console** (`console/index.html`) — search box → live results, with a prominent
-  SAMPLE-DATA banner and derived-value tags.
-- **Labelled sample data** (`precinct/sample_data.py`) — synthetic FL-format voters so the
-  whole thing runs *before the real disk arrives*. Everything is stamped
-  `provenance="illustrative"`.
+**Live demo:** the app ships with 400 labeled illustrative voters and a sample ballot
+season — every derived number is marked, sample data is never passed off as real.
+Press ▶ "60-sec tour" in the header and it demos itself.
+
+## What's inside
+- **Voter data layer** — canonical multi-state schema; Florida adapter pinned to the
+  official Voter Extract layout; drag-drop loader; Postgres-backed store that scales
+  to the full statewide file (SQL-compiled targeting, no 13M-row RAM tricks)
+- **Targeting** — natural language ("low-propensity Republican men under 40 in HD 35")
+  with the parse echoed back as filters; Claude rephrases free-form phrasing
+- **Field ops** — street-ordered walk sheets, balanced turf splitting, turf maps,
+  phone-bank call sheets, canvass tagging, **vote-by-mail ballot chase**
+- **Finance & compliance** — real cited FL contribution limits (s.106.08), compliance
+  flags, AI document intake (Claude drafts, a human approves — always)
+- **Ask Precinct** — plain-English Q&A over campaign aggregates (no voter PII ever
+  goes to the model)
+- **Multi-campaign** with per-campaign data walls, memberships, audit trail on every
+  write, auth (scrypt + hashed session tokens), security headers, per-IP rate limits
+
+## Stack
+Python / FastAPI · Postgres (Cloud SQL) or SQLite · vanilla single-file frontend ·
+Anthropic Claude for the AI seams · Cloud Run. ~55 pytest tests run against BOTH
+database engines.
 
 ## Run it
-```bash
-cd precinct
-pip install -r requirements.txt        # (use --break-system-packages on some systems)
-python -m pytest -q                     # 26 tests, value-pinned
-python -m uvicorn precinct.api:app --reload
-# then open http://localhost:8000/
 ```
+pip install -r requirements.txt
+python -m pytest -q
+python -m uvicorn precinct.api:app     # http://localhost:8000
+```
+Optional env: `ANTHROPIC_API_KEY` (AI seams; rule-based fallbacks otherwise),
+`PRECINCT_PG_*` (Postgres), `PRECINCT_STORE=pg` (SQL voter store),
+`PRECINCT_AUTH=1` (accounts).
 
-## Plugging in REAL Florida voters (the only thing between this and real data)
-1. Rob places the standing request → the official monthly extract arrives (see
-   `../Florida_Voter_Data_Access.md`).
-2. Point the store at it — one line:
-   ```python
-   from precinct.store import VoterStore
-   STORE = VoterStore.from_fl_zip("Voter_Registration_YYYYMMDD.zip",
-                                   "Voter_History_YYYYMMDD.zip")
-   ```
-   Records now come back `provenance="real"` and the console banner flips to green.
-
-## Provenance labels (build-kit non-negotiable)
-- **real** — straight from the official extract.
-- **derived** — computed by Precinct (age, turnout score, reach).
-- **illustrative** — sample data, not real voters.
-
-## Where this sits in the build (kit stages)
-S0–S1.5 ✅ (docs + schema map) · **S2 ✅ pure core + tests green** · **S4 🟡 API + console local** ·
-S3 (calibrate on the real disk), S5 (connectors), S6 (deploy), S7 (independent audit) — next.
+## Data & honesty posture
+Voter data comes from official state public-records extracts under their permitted
+political/scholarly use. Sample data is labeled illustrative everywhere. Derived
+values are marked ◈. AI-read documents carry a provenance pill and require human
+approval before anything is committed or filed.
