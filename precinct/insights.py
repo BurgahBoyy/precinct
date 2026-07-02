@@ -12,7 +12,8 @@ import json
 import re
 
 
-def campaign_snapshot(summary: dict, tag_counts: dict, lists: list, fin_report: dict, donors: list) -> dict:
+def campaign_snapshot(summary: dict, tag_counts: dict, lists: list, fin_report: dict, donors: list,
+                      ballots: dict | None = None) -> dict:
     """Aggregates only. Compact on purpose (token budget + privacy)."""
     return {
         "voter_universe": {
@@ -35,6 +36,13 @@ def campaign_snapshot(summary: dict, tag_counts: dict, lists: list, fin_report: 
              "room_general": str(d.get("room_general")), "maxed": d.get("maxed")}
             for d in donors
         ],
+        "ballot_chase": (None if not ballots or not ballots.get("election") else {
+            "election": ballots["election"],
+            "our_supporters": ballots.get("supporters", {}),
+            "entire_universe": ballots.get("overall", {}),
+            "meaning": "banked = ballot returned/early-voted (safe); outstanding = ballot out but NOT returned (go chase)",
+            "season_data": ballots.get("provenance"),
+        }),
         "data_note": "voter records are an illustrative sample, finance figures are seed+entered demo data",
     }
 
@@ -52,6 +60,11 @@ def rule_answer(question: str, snap: dict) -> str:
         maxed = [d["donor"] for d in snap["donor_room"] if d.get("maxed")]
         openroom = [f"{d['donor']} (${d['room_general']})" for d in snap["donor_room"] if not d.get("maxed")]
         parts.append("Maxed out: " + (", ".join(maxed) or "nobody") + ". Room to give: " + (", ".join(openroom) or "nobody") + ".")
+    if re.search(r"ballot|chase|vbm|mail|banked|outstanding|early vot", q) and snap.get("ballot_chase"):
+        b = snap["ballot_chase"]
+        parts.append(f"Ballot chase ({b['election']}): our supporters — {b['our_supporters'].get('banked',0)} banked, "
+                     f"{b['our_supporters'].get('outstanding',0)} outstanding; universe-wide — "
+                     f"{b['entire_universe'].get('banked',0)} banked, {b['entire_universe'].get('outstanding',0)} outstanding.")
     if re.search(r"list|turf|walk", q):
         parts.append("Saved lists: " + (", ".join(f"{l['name']} ({l['voters']})" for l in snap["saved_lists"]) or "none yet") + ".")
     if re.search(r"voter|universe|party|county|how many|total", q) or not parts:
