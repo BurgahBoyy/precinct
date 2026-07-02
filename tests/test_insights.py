@@ -23,3 +23,11 @@ def test_target_gibberish_stays_honest_offline():
     d = r.json()
     assert d["ai_note"] is None                  # no AI offline; no fake filters invented
     assert d["understood"]["filters"] == []
+
+
+def test_ask_knows_the_ballot_chase_offline():
+    r = client.post("/ask", json={"question": "how many of our ballots are still outstanding in the chase?", "campaign_id": 1})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["method"] == "rule-based"
+    assert "Ballot chase" in d["answer"] and "outstanding" in d["answer"]
