@@ -152,7 +152,12 @@
     .side .foot{display:none}
     .content{padding:16px 14px 60px}
     .drawer{width:100%}
-    .top{padding:12px 16px}
+    .top{padding:12px 16px;flex-wrap:wrap;gap:8px}
+    .topright{margin-left:auto;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+    .campsel{max-width:46vw;font-size:12px;padding:7px 9px}
+    .badge{font-size:11px;padding:4px 9px}
+    .content{max-width:100%}
+    .tagbtns .btn{padding:8px 12px}
     .search input{min-width:0}
     .kpis{grid-template-columns:repeat(2,1fr)}
   }
@@ -358,6 +363,7 @@ function refreshView(){
   if(VIEW==='petitions') loadPetitions();
 }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmt$(v){var n=parseFloat(v);if(isNaN(n))return '$'+v;return n.toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:(n%1?2:0)});}
 
 function show(v){
   VIEW=v;
@@ -508,11 +514,11 @@ async function loadFinance(){
   const office=document.getElementById('fin-office').value;
   const rep=await (await fetch(API+'/finance/report?office='+office+cidq('&'))).json();
   const led=await (await fetch(API+'/finance/contributions'+cidq())).json();
-  document.getElementById('fin-kpis').innerHTML=kpi('$'+rep.totals.raised,'raised')+kpi('$'+rep.totals.spent,'spent')+kpi('$'+rep.totals.cash_on_hand,'cash on hand')+kpi(rep.contribution_count,'contributions');
+  document.getElementById('fin-kpis').innerHTML=kpi(fmt$(rep.totals.raised),'raised')+kpi(fmt$(rep.totals.spent),'spent')+kpi(fmt$(rep.totals.cash_on_hand),'cash on hand')+kpi(rep.contribution_count,'contributions');
   const flags=rep.compliance_flags||[];
   document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
   var c=led.contributions||[], e=led.expenses||[];
-  document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+x.donor_name+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">$'+x.amount+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+x.payee+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">$'+x.amount+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.purpose+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
+  document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+x.donor_name+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+x.payee+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.purpose+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
 }
 function _fld(l,v){return '<div><div style="font-size:11px;color:var(--muted)">'+l+'</div><div style="font-size:13.5px">'+(v||'—')+'</div></div>';}
 async function runIntake(){
@@ -523,7 +529,7 @@ async function runIntake(){
     var d=await (await fetch(API+'/finance/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})).json();
     window._lastDraft=d.draft;
     var pill = d.method==='claude' ? '<span class="ai-pill">✦ Read by Claude</span>' : '<span class="rule-pill">rule-based read · offline fallback</span>';
-    document.getElementById('fin-draft').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+pill+'<span style="font-size:12px;color:var(--blue)">'+((d.read||[]).join(' · ')||'nothing recognized')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+_fld('Donor',d.draft.donor_name)+_fld('Amount',d.draft.amount?('$'+d.draft.amount):'')+_fld('Date',d.draft.date)+_fld('Check #',d.draft.check_number)+_fld('Address',d.draft.address)+'</div>'+(d.warnings||[]).map(function(w){return '<div class="warnrow">⚠ '+w+'</div>';}).join('')+'<div style="margin-top:10px"><button class="btn ghost" onclick="commitDraft()">Looks right — add to ledger</button></div></div>';
+    document.getElementById('fin-draft').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+pill+'<span style="font-size:12px;color:var(--blue)">'+((d.read||[]).join(' · ')||'nothing recognized')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+_fld('Donor',d.draft.donor_name)+_fld('Amount',d.draft.amount?fmt$(d.draft.amount):'')+_fld('Date',d.draft.date)+_fld('Check #',d.draft.check_number)+_fld('Address',d.draft.address)+'</div>'+(d.warnings||[]).map(function(w){return '<div class="warnrow">⚠ '+w+'</div>';}).join('')+'<div style="margin-top:10px"><button class="btn ghost" onclick="commitDraft()">Looks right — add to ledger</button></div></div>';
   }catch(e){
     document.getElementById('fin-draft').innerHTML='<div class="warnrow">⚠ Could not read that — try again.</div>';
   }finally{ btn.disabled=false; btn.innerHTML='Read ▶'; }
@@ -563,7 +569,7 @@ async function loadFundraising(){
   var office=document.getElementById('fund-office').value;
   var d=await (await fetch(API+'/fundraising/report?office='+office+cidq('&'))).json();
   document.getElementById('fund-list').innerHTML='<table><thead><tr><th>Donor</th><th>Given total</th><th>Given (general)</th><th>Room to give ◈</th><th>Status</th></tr></thead><tbody>'+
-    d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td class="mono">$'+x.given_total+'</td><td class="mono">$'+x.given_general+'</td><td class="mono" style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':'$'+x.room_general)+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
+    d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td class="mono">'+fmt$(x.given_total)+'</td><td class="mono">'+fmt$(x.given_general)+'</td><td class="mono" style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':fmt$(x.room_general))+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
 }
 async function loadPetitions(){
   var d=await (await fetch(API+'/lists'+cidq())).json();
