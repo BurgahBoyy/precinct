@@ -161,6 +161,12 @@
     .search input{min-width:0}
     .kpis{grid-template-columns:repeat(2,1fr)}
   }
+  @media print{
+    .side,.top,#banner,.search,.ex,.btn,.tagbtns,.scrim,.drawer,.toast{display:none!important}
+    body{background:#fff}
+    .content{padding:0;max-width:100%}
+    .card{border:0;box-shadow:none;margin:0 0 12px;page-break-inside:avoid}
+  }
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -203,6 +209,20 @@
           <h3>Top counties</h3>
           <div class="sub">Derived.</div>
           <div id="counties"></div>
+        </div>
+        <div class="card">
+          <h3>Campaign pulse <span class="muted" style="font-weight:400;font-size:11.5px">· this campaign</span></h3>
+          <div class="sub">Live from your canvass, lists, and ledger.</div>
+          <div id="pulse" class="kpis"></div>
+        </div>
+        <div class="card">
+          <h3>Ask Precinct <span class="ai-pill" style="vertical-align:2px">✦ AI</span></h3>
+          <div class="sub">Plain questions about this campaign's data — answers cite the numbers. Aggregates only; advisory, not legal advice.</div>
+          <div class="search">
+            <input id="askq" placeholder="How much cash do we have — and who can I still ask for money?" />
+            <button class="btn" id="askbtn" onclick="askPrecinct()">Ask ▶</button>
+          </div>
+          <div id="askout" style="margin-top:12px"></div>
         </div>
       </section>
 
@@ -277,7 +297,7 @@
           <div id="fin-flags" style="margin-top:12px"></div>
         </div>
         <div class="card">
-          <h3>Ledger</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0 0 12px">Ledger</h3><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportLedger()">⬇ CSV</button></div>
           <div id="fin-ledger" style="overflow:auto"></div>
         </div>
       </section>
@@ -287,10 +307,10 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <h3 style="margin:0">Fundraising — room to give</h3>
-            <select id="fund-office" onchange="loadFundraising()" style="padding:9px;border:1px solid var(--line);border-radius:9px">
+            <span style="display:flex;gap:8px;align-items:center"><select id="fund-office" onchange="loadFundraising()" style="padding:9px;border:1px solid var(--line);border-radius:9px">
               <option value="other">Legislative / local · $1,000</option>
               <option value="statewide">Statewide · $3,000</option>
-            </select>
+            </select><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportFund()">⬇ CSV</button></span>
           </div>
           <div class="sub">How much more each donor can legally give this election (limit − given in the general). Limits real (FL s.106.08).</div>
           <div id="fund-list" style="overflow:auto"></div>
@@ -356,6 +376,7 @@ async function switchCampaign(val){
   refreshView();
 }
 function refreshView(){
+  if(VIEW==='dash') loadPulse();
   if(VIEW==='lists') loadLists();
   if(VIEW==='finance') loadFinance();
   if(VIEW==='field') loadFieldPicker();
@@ -364,6 +385,32 @@ function refreshView(){
 }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmt$(v){var n=parseFloat(v);if(isNaN(n))return '$'+v;return n.toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:(n%1?2:0)});}
+function dlCSV(name,rows){ if(!rows||!rows.length){toast('Nothing to export yet');return;}
+  var heads=Object.keys(rows[0]);
+  var csv=[heads.join(',')].concat(rows.map(function(r){return heads.map(function(h){var v=r[h]==null?'':String(r[h]);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',');})).join('\n');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;a.click();toast('Exported '+name);}
+function exportList(){dlCSV((window._lastListName||'list')+'.csv',window._lastListRows);}
+function exportWalk(){dlCSV((window._lastWalkName||'walk-sheet')+'.csv',window._lastWalkRows);}
+function exportLedger(){dlCSV('ledger.csv',window._lastLedgerRows);}
+function exportFund(){dlCSV('fundraising-room.csv',window._lastFundRows);}
+async function loadPulse(){
+  try{
+    var res=await Promise.all([fetch(API+'/tags'+cidq()).then(function(r){return r.json();}),fetch(API+'/lists'+cidq()).then(function(r){return r.json();}),fetch(API+'/finance/report?office=other'+cidq('&')).then(function(r){return r.json();})]);
+    var t=res[0].counts||{}; var doors=Object.keys(t).reduce(function(a,k){return a+t[k];},0);
+    document.getElementById('pulse').innerHTML=kpi(t.support||0,'supporters')+kpi(t.lean||0,'leaning')+kpi(t.undecided||0,'undecided')+kpi(doors,'doors tagged')+kpi((res[1].lists||[]).length,'lists / turfs')+kpi(fmt$(res[2].totals.raised),'raised');
+  }catch(e){}
+}
+async function askPrecinct(){
+  var q=document.getElementById('askq').value.trim(); if(!q)return;
+  var btn=document.getElementById('askbtn'); btn.disabled=true; btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Thinking…';
+  document.getElementById('askout').innerHTML='<div class="muted" style="font-size:13px"><span class="spin"></span> Analyzing this campaign&#39;s data…</div>';
+  try{
+    var d=await (await fetch(API+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,campaign_id:CID})})).json();
+    var pill=d.method==='claude'?'<span class="ai-pill">✦ Answered by Claude</span>':'<span class="rule-pill">rule-based summary · offline</span>';
+    document.getElementById('askout').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="margin-bottom:8px">'+pill+'</div><div style="font-size:13.5px;line-height:1.6">'+esc(d.answer)+'</div><div class="legend" style="margin-top:8px">Aggregates only — no voter records leave the app. Advisory, not legal advice.</div></div>';
+  }catch(e){document.getElementById('askout').innerHTML='<div class="warnrow">⚠ Could not answer — try again.</div>';}
+  btn.disabled=false;btn.innerHTML='Ask ▶';
+}
 
 function show(v){
   VIEW=v;
@@ -397,6 +444,7 @@ async function boot(){
     renderDash(s);
     const c=await (await fetch(API+'/counties')).json();
     renderCounties(c.counties);
+    loadPulse();
     runTarget();
   }catch(e){
     document.getElementById('banner').classList.remove('hide');
@@ -428,6 +476,7 @@ async function runTarget(){
   if(!r.ok){u.innerHTML='<span class="warnrow">Bad query ('+r.status+').</span>';return;}
   const d=await r.json();
   u.innerHTML='<b>Precinct read that as:</b> '+(d.understood.filters.length?d.understood.filters.map(f=>`<span class="chip">${f}</span>`).join(''):'<span class="chip">everyone</span>')+
+    (d.ai_note?'<div class="sub" style="color:#7c3aed;margin-top:6px">✦ '+esc(d.ai_note)+'</div>':'')+
     (d.understood.warnings||[]).map(w=>`<div class="warnrow">⚠ ${w}</div>`).join('');
   const tb=document.querySelector('#ttable tbody');
   tb.innerHTML=d.results.map(row).join('');
@@ -501,8 +550,9 @@ async function loadLists(){
 }
 async function openList(id){
   const d=await (await fetch(API+'/lists/'+id)).json();
+  window._lastListName=d.name; window._lastListRows=d.results.map(r=>({voter_id:r.voter_id,name:r.name,party:r.party,county:r.county,precinct:r.precinct,age:r.age,turnout_pct:Math.round(r.turnout_score*100)}));
   const v=document.getElementById('listview');v.classList.remove('hide');
-  v.innerHTML=`<h3>${d.name} <span class="muted" style="font-size:13px">· ${d.count} voters</span></h3>
+  v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">${d.name} <span class="muted" style="font-size:13px">· ${d.count} voters</span></h3><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportList()">⬇ CSV</button></div>
     <div class="sub">“${d.query}”</div>
     <div style="overflow:auto"><table><thead><tr><th>Name</th><th>Party</th><th>County</th><th>Prec.</th><th>Age ◈</th><th>Turnout ◈</th></tr></thead>
     <tbody>${d.results.map(r=>{const cls=pc[r.party]?('p-'+r.party):'p-NPA';return `<tr onclick="openVoter('${r.voter_id}')"><td>${r.name}</td><td><span class="pill ${cls}">${r.party}</span></td><td>${r.county}</td><td class="mono">${r.precinct}</td><td class="mono">${r.age??'—'}</td><td class="mono">${Math.round(r.turnout_score*100)}%</td></tr>`;}).join('')}</tbody></table></div>`;
@@ -518,6 +568,7 @@ async function loadFinance(){
   const flags=rep.compliance_flags||[];
   document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
   var c=led.contributions||[], e=led.expenses||[];
+  window._lastLedgerRows=c.map(function(x){return {type:'in',who:x.donor_name,amount:x.amount,date:x.date,detail:x.phase+' · '+x.method,provenance:x.provenance};}).concat(e.map(function(x){return {type:'out',who:x.payee,amount:x.amount,date:x.date,detail:x.purpose,provenance:x.provenance};}));
   document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+x.donor_name+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+x.payee+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.purpose+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
 }
 function _fld(l,v){return '<div><div style="font-size:11px;color:var(--muted)">'+l+'</div><div style="font-size:13.5px">'+(v||'—')+'</div></div>';}
@@ -549,8 +600,9 @@ async function loadFieldPicker(){
 var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
 async function openWalk(lid){
   const d=await (await fetch(API+'/walklist/'+lid+cidq())).json();
+  window._lastWalkName=d.name+' walk sheet'; window._lastWalkRows=[]; d.streets.forEach(function(s){s.stops.forEach(function(x){window._lastWalkRows.push({street:s.street,name:x.name,party:x.party,address:x.address,tags:(x.tags||[]).join('; ')});});});
   const v=document.getElementById('walkview'); v.classList.remove('hide');
-  var html='<h3>'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3>';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
   d.streets.forEach(function(s){
     html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+s.street+'</div>';
     s.stops.forEach(function(x){
@@ -568,6 +620,7 @@ async function canvass(vid,tag){
 async function loadFundraising(){
   var office=document.getElementById('fund-office').value;
   var d=await (await fetch(API+'/fundraising/report?office='+office+cidq('&'))).json();
+  window._lastFundRows=(d.donors||[]).map(function(x){return {donor:x.donor,given_total:x.given_total,given_general:x.given_general,room_general:x.room_general,maxed:x.maxed};});
   document.getElementById('fund-list').innerHTML='<table><thead><tr><th>Donor</th><th>Given total</th><th>Given (general)</th><th>Room to give ◈</th><th>Status</th></tr></thead><tbody>'+
     d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td class="mono">'+fmt$(x.given_total)+'</td><td class="mono">'+fmt$(x.given_general)+'</td><td class="mono" style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':fmt$(x.room_general))+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
 }
@@ -578,7 +631,7 @@ async function loadPetitions(){
 }
 async function openPetition(lid){
   var d=await (await fetch(API+'/petition/'+lid)).json();
-  document.getElementById('pet-sheet').innerHTML='<div class="sub">'+d.count+' pre-filled lines · '+d.name+'</div><table><thead><tr><th>#</th><th>Name</th><th>Address</th><th>Signature</th></tr></thead><tbody>'+d.rows.map(function(r,i){return '<tr><td class="muted mono">'+(i+1)+'</td><td>'+r.name+'</td><td class="muted">'+r.address+'</td><td style="color:var(--muted)">__________________</td></tr>';}).join('')+'</tbody></table>';
+  document.getElementById('pet-sheet').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div class="sub" style="margin:0">'+d.count+' pre-filled lines · '+d.name+'</div><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></div><table><thead><tr><th>#</th><th>Name</th><th>Address</th><th>Signature</th></tr></thead><tbody>'+d.rows.map(function(r,i){return '<tr><td class="muted mono">'+(i+1)+'</td><td>'+r.name+'</td><td class="muted">'+r.address+'</td><td style="color:var(--muted)">__________________</td></tr>';}).join('')+'</tbody></table>';
 }
 async function validateSig(){
   var name=document.getElementById('pet-sig').value.trim(); if(!name)return;
@@ -594,6 +647,7 @@ document.addEventListener('keydown',function(e){
   var a=document.activeElement; if(!a)return;
   if(a.id==='q') runTarget();
   else if(a.id==='fin-intake') runIntake();
+  else if(a.id==='askq') askPrecinct();
   else if(a.id==='pet-sig') validateSig();
 });
 boot();
