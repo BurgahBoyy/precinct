@@ -130,6 +130,24 @@ def _num(v: Voter) -> int:
     return int(m.group(1)) if m else 0
 
 
+_COUNTY_ANCHORS = {"Miami-Dade": (25.774, -80.194), "Orange": (28.538, -81.379), "Duval": (30.332, -81.656),
+                   "Hillsborough": (27.951, -82.457), "Pinellas": (27.876, -82.638)}
+
+
+def _pseudo_coords(v: Voter):
+    """Illustrative map positions for SAMPLE data only (county anchor + stable street hash).
+    Real data gets None until the geocoding pipeline runs — the UI says so."""
+    if v.provenance != "illustrative":
+        return None, None
+    import hashlib as _h
+    a = _COUNTY_ANCHORS.get(v.county, (27.8, -81.7))
+    hs = int(_h.md5((v.county + "|" + _street(v)).encode()).hexdigest()[:8], 16)
+    dlat = ((hs % 1000) / 1000 - 0.5) * 0.08
+    dlng = (((hs // 1000) % 1000) / 1000 - 0.5) * 0.08
+    n = _num(v)
+    return (round(a[0] + dlat + (n % 100) * 0.00006, 6), round(a[1] + dlng + ((n // 100) % 10) * 0.00006, 6))
+
+
 _bootstrap()
 
 
@@ -352,7 +370,8 @@ def walklist(list_id: int, campaign_id: int = DEFAULT_CID, turfs: int = 1) -> di
     for st in sorted(groups):
         stops = sorted(groups[st], key=_num)
         streets.append({"street": st, "stops": [
-            {**voter_row(x), "address": x.residence.one_line(), "tags": DB.tags_for_voter(campaign_id, x.voter_id)}
+            {**voter_row(x), "address": x.residence.one_line(), "tags": DB.tags_for_voter(campaign_id, x.voter_id),
+             "lat": _pseudo_coords(x)[0], "lng": _pseudo_coords(x)[1]}
             for x in stops]})
     turfs = max(1, min(int(turfs), 10))
     bins = [{"turf": i + 1, "streets": [], "doors": 0} for i in range(turfs)]
@@ -364,6 +383,7 @@ def walklist(list_id: int, campaign_id: int = DEFAULT_CID, turfs: int = 1) -> di
         b["streets"].sort(key=lambda s: s["street"])
     return {"list_id": list_id, "name": lst["name"], "streets": streets,
             "turfs": bins, "turf_count": turfs,
+            "positions": "illustrative (county anchor + street hash)" if STORE.provenance == "illustrative" else "pending geocoding of the real file",
             "stop_count": sum(len(s["stops"]) for s in streets), "data_provenance": STORE.provenance}
 
 
