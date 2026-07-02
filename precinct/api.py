@@ -50,9 +50,11 @@ def _bootstrap():
                                 method=s[4], address=s[5], check_number=s[6], provenance="illustrative")
         DB.add_expense(cid, "Print Shop", "400", "2026-05-15", "mailers", "illustrative")
         DB.add_expense(cid, "Digital Ads Co", "300", "2026-06-02", "online ads", "illustrative")
-
-
-_bootstrap()
+        lst_q = "NPA voters 30-45 who voted by mail"
+        _, matched = _run_query(lst_q)
+        DB.save_list(cid, "Persuasion turf — mail-first NPAs", lst_q, [v.voter_id for v in matched])
+        for vid, tg in zip([v.voter_id for v in matched][:3], ["support", "lean", "undecided"]):
+            DB.add_tag(cid, vid, tg)
 
 
 # ---------- voter serialization ----------
@@ -97,6 +99,9 @@ def _street(v: Voter) -> str:
 def _num(v: Voter) -> int:
     m = re.match(r"\s*(\d+)", v.residence.line1 or "")
     return int(m.group(1)) if m else 0
+
+
+_bootstrap()
 
 
 # ---------- finance helpers (DB -> engine objects) ----------
