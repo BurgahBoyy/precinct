@@ -29,6 +29,7 @@ def conn() -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, name TEXT, query TEXT, voter_ids TEXT, count INT, created TEXT);
         CREATE TABLE IF NOT EXISTS contributions(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, donor_name TEXT, amount TEXT, date TEXT, phase TEXT, method TEXT, address TEXT, check_number TEXT, provenance TEXT, created TEXT);
         CREATE TABLE IF NOT EXISTS expenses(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, payee TEXT, amount TEXT, date TEXT, purpose TEXT, provenance TEXT, created TEXT);
+        CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INT, action TEXT, detail TEXT, created TEXT);
         """)
         _conn.commit()
     return _conn
@@ -104,3 +105,12 @@ def add_expense(cid: int, payee: str, amount: str, date: str, purpose: str, prov
 
 def get_expenses(cid: int) -> list[dict]:
     return [dict(r) for r in conn().execute("SELECT * FROM expenses WHERE campaign_id=? ORDER BY id", (cid,))]
+
+
+# --- audit trail (every write, compliance posture) ---
+def log_action(cid: int, action: str, detail: str = ""):
+    _write("INSERT INTO audit(campaign_id,action,detail,created) VALUES(?,?,?,?)", (cid, action, (detail or "")[:300], _now()))
+
+def get_audit(cid: int, limit: int = 20) -> list[dict]:
+    limit = max(1, min(int(limit), 100))
+    return [dict(r) for r in conn().execute("SELECT action,detail,created FROM audit WHERE campaign_id=? ORDER BY id DESC LIMIT ?", (cid, limit))]
