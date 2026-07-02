@@ -143,4 +143,341 @@
 
       <!-- DASHBOARD -->
       <section id="v-dash">
-        <div class="kpis"
+        <div class="kpis" id="kpis"></div>
+        <div class="card" style="margin-top:16px">
+          <h3>Registered voters by party</h3>
+          <div class="sub">Derived — counts computed from the loaded records.</div>
+          <div id="party"></div>
+        </div>
+        <div class="card">
+          <h3>Top counties</h3>
+          <div class="sub">Derived.</div>
+          <div id="counties"></div>
+        </div>
+      </section>
+
+      <!-- TARGETING -->
+      <section id="v-target" class="hide">
+        <div class="card">
+          <h3>Describe your target in plain English</h3>
+          <div class="search">
+            <input id="q" value="low-propensity Democratic women over 50 in Orange county who voted by mail" />
+            <button class="btn" onclick="runTarget()">Target ▶</button>
+          </div>
+          <div class="ex">Try:
+            <a onclick="ex('Republican men under 40 in Duval county')">Republican men under 40 in Duval</a>
+            <a onclick="ex('NPA voters 30-45 who voted by mail')">NPA 30–45 who voted by mail</a>
+            <a onclick="ex('active Democrats in Miami-Dade who skipped 2022')">Dems in Miami-Dade who skipped 2022</a>
+          </div>
+          <div id="understood" style="margin-top:12px"></div>
+        </div>
+        <div id="tresults" class="card hide">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div id="tcount" class="muted" style="font-size:13px"></div>
+            <button class="btn ghost" onclick="saveList()">＋ Save as list</button>
+          </div>
+          <div style="overflow:auto"><table id="ttable"><thead><tr>
+            <th>Name</th><th>Party</th><th>County</th><th>Prec.</th>
+            <th>Age <span class="d">◈</span></th><th>Turnout <span class="d">◈</span></th><th>Reach <span class="d">◈</span></th>
+          </tr></thead><tbody></tbody></table></div>
+          <div class="legend">◈ derived by Precinct · click any voter for the full record.</div>
+        </div>
+      </section>
+
+      <!-- LISTS -->
+      <section id="v-lists" class="hide">
+        <div class="card">
+          <h3>Saved lists &amp; turf</h3>
+          <div class="sub">Save any target as a named list — your turf for canvassing, phones, or mail.</div>
+          <div id="listwrap"><div class="muted">No lists yet. Build one in Targeting → “Save as list”.</div></div>
+        </div>
+        <div id="listview" class="card hide"></div>
+      </section>
+
+      <!-- FIELD -->
+      <section id="v-field" class="hide">
+        <div class="card">
+          <h3>Walk a list</h3>
+          <div class="sub">Pick a saved list — Precinct cuts it into a street-ordered walk sheet. Tap a door to log the result; it saves to the campaign (no barcode scanners).</div>
+          <div id="field-picker"></div>
+        </div>
+        <div id="walkview" class="card hide"></div>
+      </section>
+
+      <!-- FINANCE -->
+      <section id="v-finance" class="hide">
+        <div class="card">
+          <h3>Read a contribution <span class="muted" style="font-size:12.5px">— paste a check memo or receipt line; AI drafts the entry</span></h3>
+          <div class="search">
+            <input id="fin-intake" placeholder="From Maria Gonzalez, 88 Sunset Blvd, $1,500 check #4402 6/20/2026" />
+            <button class="btn" onclick="runIntake()">Read ▶</button>
+          </div>
+          <div id="fin-draft" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <h3 style="margin:0">Finance report</h3>
+            <select id="fin-office" onchange="loadFinance()" style="padding:9px;border:1px solid var(--line);border-radius:9px">
+              <option value="other">Legislative / local · limit $1,000</option>
+              <option value="statewide">Statewide · limit $3,000</option>
+            </select>
+          </div>
+          <div class="sub">Totals derived. Limits real (FL s.106.08, per election; primary and general separate). AI drafts need human approval before filing.</div>
+          <div id="fin-kpis" class="kpis"></div>
+          <div id="fin-flags" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>Ledger</h3>
+          <div id="fin-ledger" style="overflow:auto"></div>
+        </div>
+      </section>
+
+      <!-- FUNDRAISING -->
+      <section id="v-fundraise" class="hide">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <h3 style="margin:0">Fundraising — room to give</h3>
+            <select id="fund-office" onchange="loadFundraising()" style="padding:9px;border:1px solid var(--line);border-radius:9px">
+              <option value="other">Legislative / local · $1,000</option>
+              <option value="statewide">Statewide · $3,000</option>
+            </select>
+          </div>
+          <div class="sub">How much more each donor can legally give this election (limit − given in the general). Limits real (FL s.106.08).</div>
+          <div id="fund-list" style="overflow:auto"></div>
+        </div>
+      </section>
+
+      <!-- PETITIONS -->
+      <section id="v-petitions" class="hide">
+        <div class="card">
+          <h3>Petitions &amp; ballot access</h3>
+          <div class="sub">Pre-fill a petition sheet from a saved list, and validate signed names against the voter roll.</div>
+          <div id="pet-picker" style="margin-bottom:12px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="pet-sig" placeholder="Validate a signed name against the roll…" style="flex:1;min-width:240px;padding:11px;border:1px solid var(--line);border-radius:10px" />
+            <button class="btn" onclick="validateSig()">Check</button>
+          </div>
+          <div id="pet-sigresult" style="margin-top:8px"></div>
+          <div id="pet-sheet" style="margin-top:12px;overflow:auto"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer"><div id="dcontent"></div></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const API="";
+let LAST_QUERY="";
+const pc={DEM:'DEM',REP:'REP',GRN:'GRN',LIB:'LIB'};
+
+function show(v){
+  document.querySelectorAll('#nav .nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));
+  ['dash','target','lists','field','finance','fundraise','petitions'].forEach(x=>document.getElementById('v-'+x).classList.toggle('hide',x!==v));
+  document.getElementById('vtitle').textContent={dash:'Dashboard',target:'Targeting',lists:'Lists & turf',field:'Field ops',finance:'Finance',fundraise:'Fundraising',petitions:'Petitions'}[v];
+  if(v==='lists') loadLists();
+  if(v==='finance') loadFinance();
+  if(v==='field') loadFieldPicker();
+  if(v==='fundraise') loadFundraising();
+  if(v==='petitions') loadPetitions();
+}
+document.getElementById('nav').addEventListener('click',e=>{const n=e.target.closest('.nav');if(n)show(n.dataset.v);});
+function ex(t){document.getElementById('q').value=t;show('target');runTarget();}
+
+async function boot(){
+  try{
+    const h=await (await fetch(API+'/health')).json();
+    const isSample=h.data_provenance==='illustrative';
+    const b=document.getElementById('databadge');
+    b.className='badge '+(isSample?'sample':'real');
+    b.textContent=(isSample?'Sample data · ':'Real data · ')+h.voters_loaded+' voters';
+    document.getElementById('foot-data').textContent=(isSample?'sample data':'real FL data')+' · '+h.voters_loaded+' voters';
+    if(isSample){
+      const ban=document.getElementById('banner');ban.classList.remove('hide');
+      ban.innerHTML='⚠️ <b>Sample data</b> — '+h.voters_loaded+' illustrative voters (not real people). Real Florida voters load the moment the official extract is plugged in.';
+    }
+    const s=await (await fetch(API+'/summary')).json();
+    renderDash(s);
+    const c=await (await fetch(API+'/counties')).json();
+    renderCounties(c.counties);
+    runTarget();
+  }catch(e){
+    document.getElementById('banner').classList.remove('hide');
+    document.getElementById('banner').innerHTML='Could not reach the API. Start it: <code>python -m uvicorn precinct.api:app</code> then open <code>http://localhost:8000/</code>.';
+  }
+}
+
+function renderDash(s){
+  document.getElementById('kpis').innerHTML=
+    kpi(s.total,'records')+kpi(s.active,'active')+kpi(s.with_email,'with email')+
+    kpi(Object.keys(s.by_county).length,'counties')+kpi(Object.keys(s.by_party).length,'parties');
+  const max=Math.max(...Object.values(s.by_party));
+  document.getElementById('party').innerHTML=Object.entries(s.by_party).map(([p,n])=>bars(p,n,max)).join('');
+}
+function renderCounties(c){
+  const es=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,8);const max=Math.max(...es.map(e=>e[1]));
+  document.getElementById('counties').innerHTML=es.map(([k,n])=>
+    `<div style="display:flex;align-items:center;gap:10px;margin:5px 0"><span style="min-width:110px;font-size:13px">${k}</span><div class="bar" style="flex:1"><span style="width:${Math.round(100*n/max)}%"></span></div><span class="muted" style="min-width:36px;text-align:right">${n}</span></div>`).join('');
+}
+function kpi(v,l){return `<div class="kpi"><b>${v}</b><small>${l}</small></div>`;}
+function bars(p,n,max){const cls=pc[p]?('p-'+p):'p-NPA';
+  return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0"><span class="pill ${cls}" style="min-width:46px;text-align:center">${p}</span><div class="bar" style="flex:1"><span style="width:${Math.round(100*n/max)}%"></span></div><span class="muted" style="min-width:36px;text-align:right">${n}</span></div>`;}
+
+async function runTarget(){
+  const q=document.getElementById('q').value.trim();if(!q)return;LAST_QUERY=q;
+  const r=await fetch(API+'/target',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,limit:200})});
+  const u=document.getElementById('understood');
+  if(!r.ok){u.innerHTML='<span class="warnrow">Bad query ('+r.status+').</span>';return;}
+  const d=await r.json();
+  u.innerHTML='<b>Precinct read that as:</b> '+(d.understood.filters.length?d.understood.filters.map(f=>`<span class="chip">${f}</span>`).join(''):'<span class="chip">everyone</span>')+
+    (d.understood.warnings||[]).map(w=>`<div class="warnrow">⚠ ${w}</div>`).join('');
+  const tb=document.querySelector('#ttable tbody');
+  tb.innerHTML=d.results.map(row).join('');
+  document.getElementById('tresults').classList.remove('hide');
+  document.getElementById('tcount').innerHTML=`<b>${d.total_matched}</b> voters matched · <span class="muted">data: ${d.data_provenance}</span>`;
+}
+function row(r){const cls=pc[r.party]?('p-'+r.party):'p-NPA';
+  return `<tr onclick="openVoter('${r.voter_id}')">
+    <td>${r.name} <span class="muted">#${r.voter_id}</span></td>
+    <td><span class="pill ${cls}">${r.party}</span></td>
+    <td>${r.county}</td><td>${r.precinct}</td>
+    <td>${r.age??'—'}</td>
+    <td><div style="display:flex;align-items:center;gap:8px"><div class="bar"><span style="width:${Math.round(r.turnout_score*100)}%"></span></div><span class="muted">${Math.round(r.turnout_score*100)}%</span></div></td>
+    <td>${r.contactable?'✓':'—'}</td></tr>`;}
+
+async function openVoter(id){
+  const v=await (await fetch(API+'/voter/'+id)).json();
+  const cls=pc[v.party]?('p-'+v.party):'p-NPA';
+  const hist=(v.voting_history||[]).slice().reverse().map(h=>`<div class="ev"><span class="dot"></span><span>${h.date} · ${h.type} · <span class="muted">${h.method.replace(/_/g,' ')}</span></span></div>`).join('')||'<div class="muted">No voting history on file.</div>';
+  document.getElementById('dcontent').innerHTML=`
+    <div class="dhead"><div><div style="font-size:17px;font-weight:600">${v.name}</div>
+      <div class="muted" style="font-size:12.5px">#${v.voter_id} · <span class="pill ${cls}">${v.party}</span> · ${v.status} · ${v.provenance}</div></div>
+      <button class="x" onclick="closeDrawer()">×</button></div>
+    <div class="body">
+      <div class="kv"><span>Age ◈</span><span>${v.age??'—'}</span></div>
+      <div class="kv"><span>Residence</span><span style="text-align:right">${v.residence||'—'}</span></div>
+      <div class="kv"><span>County / precinct</span><span>${v.county} · ${v.precinct}</span></div>
+      <div class="kv"><span>Districts (C/H/S)</span><span>${v.districts.congressional||'—'} / ${v.districts.house||'—'} / ${v.districts.senate||'—'}</span></div>
+      <div class="kv"><span>Registered</span><span>${v.registration_date||'—'}</span></div>
+      <div class="kv"><span>Turnout ◈</span><span>${Math.round(v.turnout_score*100)}%</span></div>
+      <div class="kv"><span>Phone / email</span><span style="text-align:right">${v.phone||'—'}<br>${v.email||'—'}</span></div>
+      <h3 style="margin:16px 0 4px;font-size:14px">Voting history</h3>
+      <div class="tl">${hist}</div>
+      <div class="legend">◈ derived by Precinct. Other fields map straight from the state extract (here: illustrative sample).</div>
+    </div>`;
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');}
+
+async function saveList(){
+  const name=prompt('Name this list / turf:', LAST_QUERY.slice(0,40));
+  if(!name)return;
+  const r=await fetch(API+'/lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,query:LAST_QUERY})});
+  const d=await r.json();toast('Saved “'+d.name+'” — '+d.count+' voters');
+}
+async function loadLists(){
+  const d=await (await fetch(API+'/lists')).json();
+  const w=document.getElementById('listwrap');
+  document.getElementById('listview').classList.add('hide');
+  if(!d.lists.length){w.innerHTML='<div class="muted">No lists yet. Build one in Targeting → “Save as list”.</div>';return;}
+  w.innerHTML=d.lists.map(l=>`<div class="card" style="cursor:pointer;margin:8px 0" onclick="openList(${l.id})">
+     <div style="display:flex;justify-content:space-between"><b>${l.name}</b><span class="muted">${l.count} voters</span></div>
+     <div class="muted" style="font-size:12.5px">“${l.query}” · ${l.created}</div></div>`).join('');
+}
+async function openList(id){
+  const d=await (await fetch(API+'/lists/'+id)).json();
+  const v=document.getElementById('listview');v.classList.remove('hide');
+  v.innerHTML=`<h3>${d.name} <span class="muted" style="font-size:13px">· ${d.count} voters</span></h3>
+    <div class="sub">“${d.query}”</div>
+    <div style="overflow:auto"><table><thead><tr><th>Name</th><th>Party</th><th>County</th><th>Prec.</th><th>Age ◈</th><th>Turnout ◈</th></tr></thead>
+    <tbody>${d.results.map(r=>{const cls=pc[r.party]?('p-'+r.party):'p-NPA';return `<tr onclick="openVoter('${r.voter_id}')"><td>${r.name}</td><td><span class="pill ${cls}">${r.party}</span></td><td>${r.county}</td><td>${r.precinct}</td><td>${r.age??'—'}</td><td>${Math.round(r.turnout_score*100)}%</td></tr>`;}).join('')}</tbody></table></div>`;
+  v.scrollIntoView({behavior:'smooth'});
+}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+async function loadFinance(){
+  const office=document.getElementById('fin-office').value;
+  const rep=await (await fetch(API+'/finance/report?office='+office)).json();
+  const led=await (await fetch(API+'/finance/contributions')).json();
+  document.getElementById('fin-kpis').innerHTML=kpi('$'+rep.totals.raised,'raised')+kpi('$'+rep.totals.spent,'spent')+kpi('$'+rep.totals.cash_on_hand,'cash on hand')+kpi(rep.contribution_count,'contributions');
+  const flags=rep.compliance_flags||[];
+  document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
+  var c=led.contributions||[], e=led.expenses||[];
+  document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+x.donor_name+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td>$'+x.amount+'</td><td>'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+x.payee+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td>$'+x.amount+'</td><td>'+x.date+'</td><td class="muted">'+x.purpose+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
+}
+function _fld(l,v){return '<div><div style="font-size:11px;color:var(--muted)">'+l+'</div><div style="font-size:13.5px">'+(v||'—')+'</div></div>';}
+async function runIntake(){
+  var text=document.getElementById('fin-intake').value.trim(); if(!text)return;
+  var d=await (await fetch(API+'/finance/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})).json();
+  window._lastDraft=d.draft;
+  document.getElementById('fin-draft').innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc"><div style="font-size:12px;color:var(--blue);margin-bottom:8px">AI read: '+((d.read||[]).join(' · ')||'nothing recognized')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+_fld('Donor',d.draft.donor_name)+_fld('Amount',d.draft.amount?('$'+d.draft.amount):'')+_fld('Date',d.draft.date)+_fld('Check #',d.draft.check_number)+_fld('Address',d.draft.address)+'</div>'+(d.warnings||[]).map(function(w){return '<div class="warnrow">⚠ '+w+'</div>';}).join('')+'<div style="margin-top:10px"><button class="btn ghost" onclick="commitDraft()">Looks right — add to ledger</button></div></div>';
+}
+async function commitDraft(){
+  var dr=window._lastDraft; if(!dr||!dr.amount){alert('Need at least an amount.');return;}
+  var iso='2026-01-01'; if(dr.date){var p=dr.date.split('/'); if(p.length===3){var y=p[2].length===2?('20'+p[2]):p[2]; iso=y+'-'+('0'+p[0]).slice(-2)+'-'+('0'+p[1]).slice(-2);}}
+  await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||''})});
+  document.getElementById('fin-intake').value=''; document.getElementById('fin-draft').innerHTML='<div style="color:var(--good);font-size:13px">✓ Added to ledger after your review.</div>'; loadFinance();
+}
+async function loadFieldPicker(){
+  const d=await (await fetch(API+'/lists?campaign_id=1')).json();
+  document.getElementById('walkview').classList.add('hide');
+  const w=document.getElementById('field-picker');
+  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="cursor:pointer;margin:8px 0" onclick="openWalk('+l.id+')"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div class="muted" style="font-size:12.5px">open walk sheet →</div></div>';}).join('') : '<div class="muted">No lists yet. Build one in Targeting → “Save as list”, then walk it here.</div>';
+}
+var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
+async function openWalk(lid){
+  const d=await (await fetch(API+'/walklist/'+lid+'?campaign_id=1')).json();
+  const v=document.getElementById('walkview'); v.classList.remove('hide');
+  var html='<h3>'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3>';
+  d.streets.forEach(function(s){
+    html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+s.street+'</div>';
+    s.stops.forEach(function(x){
+      var cls=pc[x.party]?('p-'+x.party):'p-NPA';
+      html+='<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span><div class="muted" style="font-size:12px">'+x.address+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CANVASS_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+    });
+  });
+  v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
+}
+async function canvass(vid,tag){
+  const r=await (await fetch(API+'/voter/'+vid+'/tag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:tag,campaign_id:1})})).json();
+  var el=document.getElementById('tags-'+vid); if(el) el.textContent=(r.tags||[]).join(', ');
+  toast('Logged: '+tag);
+}
+async function loadFundraising(){
+  var office=document.getElementById('fund-office').value;
+  var d=await (await fetch(API+'/fundraising/report?office='+office+'&campaign_id=1')).json();
+  document.getElementById('fund-list').innerHTML='<table><thead><tr><th>Donor</th><th>Given total</th><th>Given (general)</th><th>Room to give ◈</th><th>Status</th></tr></thead><tbody>'+
+    d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td>$'+x.given_total+'</td><td>$'+x.given_general+'</td><td style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':'$'+x.room_general)+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
+}
+async function loadPetitions(){
+  var d=await (await fetch(API+'/lists?campaign_id=1')).json();
+  document.getElementById('pet-sheet').innerHTML=''; document.getElementById('pet-sigresult').innerHTML='';
+  document.getElementById('pet-picker').innerHTML= d.lists.length ? 'Pre-fill from: '+d.lists.map(function(l){return '<a onclick="openPetition('+l.id+')" style="color:var(--blue);cursor:pointer;border-bottom:1px dotted;margin-right:12px">'+l.name+'</a>';}).join('') : '<span class="muted">No lists yet — build one in Targeting first.</span>';
+}
+async function openPetition(lid){
+  var d=await (await fetch(API+'/petition/'+lid)).json();
+  document.getElementById('pet-sheet').innerHTML='<div class="sub">'+d.count+' pre-filled lines · '+d.name+'</div><table><thead><tr><th>#</th><th>Name</th><th>Address</th><th>Signature</th></tr></thead><tbody>'+d.rows.map(function(r,i){return '<tr><td class="muted">'+(i+1)+'</td><td>'+r.name+'</td><td class="muted">'+r.address+'</td><td style="color:var(--muted)">__________________</td></tr>';}).join('')+'</tbody></table>';
+}
+async function validateSig(){
+  var name=document.getElementById('pet-sig').value.trim(); if(!name)return;
+  var d=await (await fetch(API+'/petition/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})).json();
+  var el=document.getElementById('pet-sigresult');
+  if(d.match==='exact') el.innerHTML='<span style="color:var(--good)">✓ Exact match on the roll: '+d.name+'</span>';
+  else if(d.match==='partial') el.innerHTML='<span style="color:var(--warn)">≈ Possible matches: '+d.candidates.map(function(c){return c.name;}).join(', ')+'</span>';
+  else el.innerHTML='<span style="color:var(--rep)">✗ No match on the roll — signature may be invalid.</span>';
+}
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  var a=document.activeElement; if(!a)return;
+  if(a.id==='q') runTarget();
+  else if(a.id==='fin-intake') runIntake();
+  else if(a.id==='pet-sig') validateSig();
+});
+boot();
+</script>
+</body>
+</html>
