@@ -30,4 +30,5 @@
 
 ## Next actions
 - **Hands (me), no gate:** Module 3 (field ops) or S5 connectors + S7 audit — can proceed now.
-- **Eyes (Rob), parallel:** place the FL standing voter-extract request (see `../Flori
+- **Eyes (Rob), parallel:** place the FL standing voter-extract request (see `../Florida_Voter_Data_Access.md`).
+- **Eyes (Rob), later:** cloud login for S6 deploy (I'll lay it out copy-paste-ready when we get there).
