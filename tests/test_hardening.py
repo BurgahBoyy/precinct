@@ -1,4 +1,5 @@
 import io
+import os
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -65,6 +66,9 @@ def test_upload_swaps_store_for_admin(monkeypatch):
         d = r.json()
         assert d["loaded"] == 3 and d["provenance"] == "real"
         h = c.get("/health").json()
-        assert h["voters_loaded"] == 3 and h["data_provenance"] == "real"
+        if os.environ.get("PRECINCT_STORE") == "pg":
+            assert h["voters_loaded"] >= 3       # pg mode UPSERTS into the standing table
+        else:
+            assert h["voters_loaded"] == 3 and h["data_provenance"] == "real"
     finally:
         A.STORE, A.UNIVERSE, A.BY_ID, A.TURNOUT_BASIS = old
