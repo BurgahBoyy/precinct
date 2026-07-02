@@ -101,7 +101,7 @@ def rephrase_query(query: str) -> str | None:
             model=config.CLAUDE_MODEL, max_tokens=80,
             system=("Rewrite the user's voter-targeting request as ONE plain line in the style of these examples: "
                     "'Republican men under 40 in Duval county' | 'low-propensity Democratic women over 50 in Orange county who voted by mail' | "
-                    "'NPA voters 30-45 who voted by mail' | 'active Democrats in Miami-Dade who skipped 2022'. "
+                    "'NPA voters 30-45 who voted by mail' | 'active Democrats in Miami-Dade who skipped 2022' | 'Republicans in HD 35' | 'women in senate district 14'. "
                     "Include ONLY constraints the user actually stated — never add low-propensity, active, or anything they didn't say. "
                     "Party words: Democratic, Republican, NPA, Green, Libertarian ('red'=Republican, 'blue'=Democratic). "
                     "No brackets, no quotes, no prose — just the query line. If it is not a voter-targeting request, return exactly: NO"),
