@@ -190,6 +190,7 @@
     <div class="top">
       <h1 id="vtitle">Dashboard</h1>
       <div class="topright">
+        <span id="userchip" class="badge hide" style="background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe"></span>
         <select id="campsel" class="campsel" onchange="switchCampaign(this.value)" title="Campaign"></select>
         <span id="databadge" class="badge sample">checking…</span>
       </div>
@@ -344,6 +345,18 @@
   </div>
 </div>
 
+<div id="authwall" class="hide" style="position:fixed;inset:0;background:var(--navy);z-index:100;display:flex;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px;width:360px;max-width:92vw">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="width:26px;height:26px;border-radius:7px;background:var(--blue);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px">▚</span><b style="font-family:var(--display);font-size:17px">Precinct</b></div>
+    <div class="sub" style="margin:0 0 12px">Sign in to your campaign workspace.</div>
+    <input id="a-email" placeholder="email" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px" />
+    <input id="a-name" placeholder="your name" class="hide" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px" />
+    <input id="a-pw" type="password" placeholder="password" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:12px" />
+    <button class="btn" style="width:100%" id="a-go" onclick="authGo()">Sign in</button>
+    <div class="sub" style="margin:10px 0 0;text-align:center"><a style="color:var(--blue);cursor:pointer" id="a-tog" onclick="authToggle()">First time here? Create the admin account</a></div>
+    <div id="a-err" class="warnrow"></div>
+  </div>
+</div>
 <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"><div id="dcontent"></div></aside>
 <div class="toast" id="toast"></div>
@@ -438,7 +451,36 @@ function show(v){
 document.getElementById('nav').addEventListener('click',e=>{const n=e.target.closest('.nav');if(n)show(n.dataset.v);});
 function ex(t){document.getElementById('q').value=t;show('target');runTarget();}
 
+var AUTH_MODE='login';
+function authToggle(){AUTH_MODE=AUTH_MODE==='login'?'register':'login';document.getElementById('a-name').classList.toggle('hide',AUTH_MODE==='login');document.getElementById('a-go').textContent=AUTH_MODE==='login'?'Sign in':'Create account';document.getElementById('a-tog').textContent=AUTH_MODE==='login'?'First time here? Create the admin account':'Have an account? Sign in';}
+async function authGo(){
+  var em=document.getElementById('a-email').value.trim(), pw=document.getElementById('a-pw').value, nm=document.getElementById('a-name').value.trim();
+  var err=document.getElementById('a-err'); err.textContent='';
+  try{
+    if(AUTH_MODE==='register'){
+      var rr=await fetch(API+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,name:nm||em.split('@')[0],password:pw})});
+      if(!rr.ok){err.textContent=((await rr.json()).detail)||'could not register';return;}
+    }
+    var r=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,password:pw})});
+    if(!r.ok){err.textContent=((await r.json()).detail)||'sign-in failed';return;}
+    document.getElementById('authwall').classList.add('hide');
+    toast('Welcome back');
+    boot();
+  }catch(e){err.textContent='network error — try again';}
+}
+async function authCheck(){
+  try{
+    var r=await fetch(API+'/auth/me');
+    if(r.status===401){document.getElementById('authwall').classList.remove('hide');return false;}
+    var me=await r.json();
+    if(me.user){var el=document.getElementById('userchip'); el.classList.remove('hide'); el.innerHTML=esc(me.user.name)+' · <a style="cursor:pointer;color:var(--blue)" onclick="doLogout()">sign out</a>';}
+    return true;
+  }catch(e){return true;}
+}
+async function doLogout(){await fetch(API+'/auth/logout',{method:'POST'});location.reload();}
+
 async function boot(){
+  if(!await authCheck())return;
   document.getElementById('kpis').innerHTML='<div class="kpi skel"><b>000</b><small>loading</small></div>'.repeat(5);
   try{
     await loadCampaigns();
@@ -690,6 +732,7 @@ document.addEventListener('keydown',function(e){
   else if(a.id==='fin-intake') runIntake();
   else if(a.id==='askq') askPrecinct();
   else if(a.id==='vq') voterSearch();
+  else if(a.id==='a-pw'||a.id==='a-email') authGo();
   else if(a.id==='pet-sig') validateSig();
 });
 boot();
