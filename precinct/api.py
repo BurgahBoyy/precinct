@@ -205,13 +205,39 @@ def voter(voter_id: str, campaign_id: int = DEFAULT_CID) -> dict:
 @app.post("/target")
 def target(req: TargetRequest) -> dict:
     parsed, matched = _run_query(req.query, req.limit)
+    ai_note = None
+    if not parsed.filters and not parsed.low_propensity:
+        from .insights import rephrase_query
+        rq = rephrase_query(req.query)
+        if rq:
+            p2, m2 = _run_query(rq, req.limit)
+            if p2.filters or p2.low_propensity:
+                parsed, matched, ai_note = p2, m2, f'Claude interpreted your phrasing as: "{rq}"'
     filters = list(parsed.filters)
     if parsed.low_propensity:
         filters.append(f"turnout <= {LOW_PROP}")
     return {"understood": {"description": parsed.description, "filters": filters, "warnings": parsed.warnings},
+            "ai_note": ai_note,
             "total_matched": len(matched), "returned": len(matched), "data_provenance": STORE.provenance,
             "derived_fields": ["age", "turnout_score", "contactable"], "turnout_basis": TURNOUT_BASIS,
             "results": [voter_row(v) for v in matched]}
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+    campaign_id: int = DEFAULT_CID
+
+
+@app.post("/ask")
+def ask_precinct(req: AskRequest) -> dict:
+    from .insights import ask, campaign_snapshot
+    rep = FIN.generate_report(_contribs_for(req.campaign_id), _expenses_for(req.campaign_id), "other")
+    donors = FIN.donor_intelligence(_contribs_for(req.campaign_id), "other").get("donors", [])
+    snap = campaign_snapshot(E.summarize(STORE.all()), DB.tag_counts(req.campaign_id),
+                             [{k: l[k] for k in ("name", "count")} for l in DB.get_lists(req.campaign_id)], rep, donors)
+    answer, method = ask(req.question, snap)
+    return {"answer": answer, "method": method, "data_provenance": STORE.provenance,
+            "note": "advisory analysis over aggregates; no raw voter records are sent to the model"}
 
 
 # ---------- campaigns (multi-campaign) ----------
