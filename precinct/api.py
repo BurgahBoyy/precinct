@@ -347,8 +347,10 @@ def ask_precinct(req: AskRequest) -> dict:
     from .insights import ask, campaign_snapshot
     rep = FIN.generate_report(_contribs_for(req.campaign_id), _expenses_for(req.campaign_id), "other")
     donors = FIN.donor_intelligence(_contribs_for(req.campaign_id), "other").get("donors", [])
+    from . import ballots as BAL
     snap = campaign_snapshot(PGS.summarize() if PGS else E.summarize(STORE.all()), DB.tag_counts(req.campaign_id),
-                             [{k: l[k] for k in ("name", "count")} for l in DB.get_lists(req.campaign_id)], rep, donors)
+                             [{k: l[k] for k in ("name", "count")} for l in DB.get_lists(req.campaign_id)], rep, donors,
+                             ballots=BAL.rollup(req.campaign_id))
     answer, method = ask(req.question, snap)
     return {"answer": answer, "method": method, "data_provenance": STORE.provenance,
             "note": "advisory analysis over aggregates; no raw voter records are sent to the model"}
