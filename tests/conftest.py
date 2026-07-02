@@ -27,3 +27,15 @@ if os.environ.get("PRECINCT_TEST_PG") == "1":
         _cur.execute(f"DROP TABLE IF EXISTS {_t} CASCADE")
     _cur.close()
     _dbr._reset_connection()   # next conn() rebuilds a fresh schema; api import then seeds it
+    if os.environ.get("PRECINCT_TEST_PG_STORE") == "1":
+        # run the WHOLE suite through the SQL store paths: seed the pg voters table
+        # with the same 400 sample voters the in-memory mode uses.
+        os.environ["PRECINCT_STORE"] = "pg"
+        from precinct import engine as _E
+        from precinct import pg_store as _PSS
+        from precinct.sample_data import load_sample_voters as _lsv
+        from precinct.schema import ElectionType as _ET
+        _PSS.init_schema()
+        _dbr._write("DELETE FROM voters")
+        _vs = _lsv(400, 42)          # same n/seed as api's from_sample
+        _PSS.insert_voters(_vs, _E.election_universe(_vs, types=(_ET.GENERAL,)))
