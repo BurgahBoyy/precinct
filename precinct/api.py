@@ -118,6 +118,11 @@ def _bootstrap():
         DB.save_list(cid, "Persuasion turf — mail-first NPAs", lst_q, [v.voter_id for v in matched])
         for vid, tg in zip([v.voter_id for v in matched][:3], ["support", "lean", "undecided"]):
             DB.add_tag(cid, vid, tg)
+    from . import ballots as BAL
+    BAL.init_schema()
+    if STORE.provenance == "illustrative" and BAL.current_election() is None:
+        ids = [v.voter_id for v in (PGS.first(1000) if PGS else STORE.all())]
+        BAL.seed_illustrative_season(ids)
 
 
 # ---------- voter serialization ----------
@@ -438,6 +443,49 @@ def calllist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
             rows.append({**voter_row(v), "phone": v.phone, "tags": DB.tags_for_voter(campaign_id, v.voter_id)})
     return {"list_id": list_id, "name": lst["name"], "count": len(rows), "results": rows,
             "data_provenance": STORE.provenance}
+
+
+@app.get("/ballots/summary")
+def ballots_summary(campaign_id: int = DEFAULT_CID) -> dict:
+    from . import ballots as BAL
+    return BAL.rollup(campaign_id)
+
+
+@app.get("/ballots/chase")
+def ballots_chase(campaign_id: int = DEFAULT_CID) -> dict:
+    """The chase list: supporters/leaners with outstanding mail ballots, full voter rows."""
+    from . import ballots as BAL
+    raw = BAL.chase_rows(campaign_id)
+    status = {r["voter_id"]: r for r in raw}
+    out = []
+    for v in _get_voters(list(status.keys())):
+        s = status[v.voter_id]
+        out.append({**voter_row(v), "phone": "" if v.protected else v.phone,
+                    "address": "" if v.protected else v.residence.one_line(),
+                    "ballot_requested": s["requested"], "ballot_sent": s["sent"],
+                    "tags": DB.tags_for_voter(campaign_id, v.voter_id)})
+    return {"election": BAL.current_election(), "count": len(out), "results": out,
+            "provenance": BAL.season_provenance(),
+            "note": "supporters + leaners whose ballots are out but not returned — go get them"}
+
+
+@app.post("/admin/load-ballots")
+async def admin_load_ballots(request: Request, ballots_file: UploadFile = File(...)) -> dict:
+    """Ingest a daily absentee/early-vote file. Admin-only, like the voter loader."""
+    if not AUTH.enabled():
+        raise HTTPException(status_code=403, detail="ballot-file loading requires auth to be enabled (admin-only)")
+    u = _user(request)
+    if not u or u.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="site admin only")
+    from . import ballots as BAL
+    data = await ballots_file.read()
+    if len(data) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="file too large")
+    n = BAL.load_ballot_lines(data.decode("latin-1").splitlines())
+    if n == 0:
+        raise HTTPException(status_code=422, detail="no ballot rows parsed — check the file format (see ballots.py column map)")
+    DB.log_action(0, "admin.ballots_loaded", f"{n} ballot-status rows by {u['email']}")
+    return {"loaded": n, "election": BAL.current_election()}
 
 
 @app.get("/audit")
