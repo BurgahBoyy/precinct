@@ -53,10 +53,44 @@ def _require_member(request: Request, campaign_id: int):
     if AUTH.enabled() and not AUTH.can_write(_user(request), campaign_id):
         raise HTTPException(status_code=403, detail="not a member of this campaign")
 
-STORE: VoterStore = VoterStore.from_sample(n=400)
-UNIVERSE = E.election_universe(STORE.all(), types=(ElectionType.GENERAL,))
+import os as _os
+
+_USE_PG_STORE = _os.environ.get("PRECINCT_STORE", "").lower() == "pg"
+if _USE_PG_STORE:
+    from . import pg_store as _PS
+    PGS = _PS.VoterStorePG()
+    STORE: VoterStore = VoterStore([], provenance=(PGS.provenance if len(PGS) else "real"))
+    UNIVERSE = PGS.universe()
+else:
+    PGS = None
+    STORE = VoterStore.from_sample(n=400)
+    UNIVERSE = E.election_universe(STORE.all(), types=(ElectionType.GENERAL,))
 TODAY = date.today()
 BY_ID = {v.voter_id: v for v in STORE.all()}
+
+
+def _get_voter(vid: str):
+    return PGS.by_id(vid) if PGS else BY_ID.get(vid)
+
+
+def _get_voters(vids: list[str]):
+    if PGS:
+        return PGS.by_ids(vids)
+    return [BY_ID[v] for v in vids if v in BY_ID]
+
+
+def _voter_count() -> int:
+    return len(PGS) if PGS else len(STORE)
+
+
+def _segment(query: str, limit: int = 1000):
+    """(parsed, matched, total) — SQL-compiled on the PG store, python engine otherwise."""
+    parsed = NL.parse(query, as_of=TODAY, low_propensity_threshold=LOW_PROP)
+    if PGS:
+        total, matched = PGS.segment(parsed.filters, parsed.low_propensity, LOW_PROP, limit=limit, as_of=TODAY)
+        return parsed, matched, total
+    _, matched = _run_query(query, limit)
+    return parsed, matched, len(matched)
 LOW_PROP = 0.34
 TURNOUT_BASIS = f"share of the {len(UNIVERSE)} general elections present in the loaded dataset"
 REDACTED = "[protected]"
@@ -80,7 +114,7 @@ def _bootstrap():
         DB.add_expense(cid, "Print Shop", "400", "2026-05-15", "mailers", "illustrative")
         DB.add_expense(cid, "Digital Ads Co", "300", "2026-06-02", "online ads", "illustrative")
         lst_q = "NPA voters 30-45 who voted by mail"
-        _, matched = _run_query(lst_q)
+        _, matched, _t = _segment(lst_q)
         DB.save_list(cid, "Persuasion turf — mail-first NPAs", lst_q, [v.voter_id for v in matched])
         for vid, tg in zip([v.voter_id for v in matched][:3], ["support", "lean", "undecided"]):
             DB.add_tag(cid, vid, tg)
@@ -213,18 +247,21 @@ class ContributionRequest(BaseModel):
 @app.get("/health")
 def health() -> dict:
     from . import config
-    return {"status": "ok", "voters_loaded": len(STORE), "data_provenance": STORE.provenance,
+    return {"status": "ok", "voters_loaded": _voter_count(), "data_provenance": STORE.provenance,
             "general_elections_in_data": len(UNIVERSE), "turnout_basis": TURNOUT_BASIS,
             "ai_ready": config.has_api_key(), "campaigns": len(DB.list_campaigns())}
 
 
 @app.get("/summary")
 def summary() -> dict:
-    return {"provenance_of_records": STORE.provenance, "values_are": "derived", **E.summarize(STORE.all())}
+    summ = PGS.summarize() if PGS else E.summarize(STORE.all())
+    return {"provenance_of_records": STORE.provenance, "values_are": "derived", **summ}
 
 
 @app.get("/counties")
 def counties() -> dict:
+    if PGS:
+        return {"counties": PGS.counties()}
     counts: dict[str, int] = {}
     for v in STORE.all():
         if v.county:
@@ -235,8 +272,9 @@ def counties() -> dict:
 @app.get("/voters")
 def voters(limit: int = 25) -> dict:
     limit = max(1, min(limit, 1000))
-    return {"count": min(limit, len(STORE)), "data_provenance": STORE.provenance,
-            "results": [voter_row(v) for v in STORE.all()[:limit]]}
+    rows = PGS.first(limit) if PGS else STORE.all()[:limit]
+    return {"count": len(rows), "data_provenance": STORE.provenance,
+            "results": [voter_row(v) for v in rows]}
 
 
 @app.get("/voters/search")
@@ -245,6 +283,10 @@ def voters_search(q: str, limit: int = 50) -> dict:
     if len(qs) < 2:
         raise HTTPException(status_code=422, detail="query too short (2+ characters)")
     limit = max(1, min(limit, 200))
+    if PGS:
+        vs = PGS.search(qs, limit)
+        return {"query": q, "count": len(vs), "results": [voter_row(v) for v in vs],
+                "data_provenance": STORE.provenance}
     out = []
     for v in STORE.all():
         hay = v.voter_id.lower() if v.protected else " ".join(
@@ -258,7 +300,7 @@ def voters_search(q: str, limit: int = 50) -> dict:
 
 @app.get("/voter/{voter_id}")
 def voter(voter_id: str, campaign_id: int = DEFAULT_CID) -> dict:
-    v = BY_ID.get(voter_id)
+    v = _get_voter(voter_id)
     if v is None:
         raise HTTPException(status_code=404, detail="voter not found")
     d = voter_detail(v)
@@ -268,7 +310,7 @@ def voter(voter_id: str, campaign_id: int = DEFAULT_CID) -> dict:
 
 @app.post("/target")
 def target(req: TargetRequest) -> dict:
-    parsed, matched = _run_query(req.query, req.limit)
+    parsed, matched, total = _segment(req.query, req.limit)
     ai_note = None
     thin = (not parsed.filters and not parsed.low_propensity) or (
         len(parsed.filters) < 2 and not parsed.low_propensity and len(req.query.split()) >= 5)
@@ -276,16 +318,16 @@ def target(req: TargetRequest) -> dict:
         from .insights import rephrase_query
         rq = rephrase_query(req.query)
         if rq:
-            p2, m2 = _run_query(rq, req.limit)
+            p2, m2, t2 = _segment(rq, req.limit)
             gain = len(p2.filters) + (1 if p2.low_propensity else 0) > len(parsed.filters) + (1 if parsed.low_propensity else 0)
             if gain:
-                parsed, matched, ai_note = p2, m2, f'Claude interpreted your phrasing as: "{rq}"'
+                parsed, matched, total, ai_note = p2, m2, t2, f'Claude interpreted your phrasing as: "{rq}"'
     filters = list(parsed.filters)
     if parsed.low_propensity:
         filters.append(f"turnout <= {LOW_PROP}")
     return {"understood": {"description": parsed.description, "filters": filters, "warnings": parsed.warnings},
             "ai_note": ai_note,
-            "total_matched": len(matched), "returned": len(matched), "data_provenance": STORE.provenance,
+            "total_matched": total, "returned": len(matched), "data_provenance": STORE.provenance,
             "derived_fields": ["age", "turnout_score", "contactable"], "turnout_basis": TURNOUT_BASIS,
             "results": [voter_row(v) for v in matched]}
 
@@ -300,7 +342,7 @@ def ask_precinct(req: AskRequest) -> dict:
     from .insights import ask, campaign_snapshot
     rep = FIN.generate_report(_contribs_for(req.campaign_id), _expenses_for(req.campaign_id), "other")
     donors = FIN.donor_intelligence(_contribs_for(req.campaign_id), "other").get("donors", [])
-    snap = campaign_snapshot(E.summarize(STORE.all()), DB.tag_counts(req.campaign_id),
+    snap = campaign_snapshot(PGS.summarize() if PGS else E.summarize(STORE.all()), DB.tag_counts(req.campaign_id),
                              [{k: l[k] for k in ("name", "count")} for l in DB.get_lists(req.campaign_id)], rep, donors)
     answer, method = ask(req.question, snap)
     return {"answer": answer, "method": method, "data_provenance": STORE.provenance,
@@ -326,7 +368,7 @@ def campaigns_create(req: CampaignRequest, request: Request) -> dict:
 # ---------- supporter CRM / canvass tags ----------
 @app.post("/voter/{voter_id}/tag")
 def tag_voter(voter_id: str, req: TagRequest, request: Request) -> dict:
-    if voter_id not in BY_ID:
+    if _get_voter(voter_id) is None:
         raise HTTPException(status_code=404, detail="voter not found")
     _require_member(request, req.campaign_id)
     DB.add_tag(req.campaign_id, voter_id, req.tag)
@@ -351,7 +393,7 @@ def tags(campaign_id: int = DEFAULT_CID) -> dict:
 @app.get("/supporters")
 def supporters(campaign_id: int = DEFAULT_CID, tag: str = "support") -> dict:
     ids = [t["voter_id"] for t in DB.tagged_voters(campaign_id, tag)]
-    rows = [{**voter_row(BY_ID[i]), "tags": DB.tags_for_voter(campaign_id, i)} for i in ids if i in BY_ID]
+    rows = [{**voter_row(v), "tags": DB.tags_for_voter(campaign_id, v.voter_id)} for v in _get_voters(ids)]
     return {"tag": tag, "count": len(rows), "results": rows, "data_provenance": STORE.provenance}
 
 
@@ -362,10 +404,8 @@ def walklist(list_id: int, campaign_id: int = DEFAULT_CID, turfs: int = 1) -> di
     if not lst:
         raise HTTPException(status_code=404, detail="list not found")
     groups: dict[str, list[Voter]] = {}
-    for vid in lst["voter_ids"]:
-        v = BY_ID.get(vid)
-        if v:
-            groups.setdefault(_street(v), []).append(v)
+    for v in _get_voters(lst["voter_ids"]):
+        groups.setdefault(_street(v), []).append(v)
     streets = []
     for st in sorted(groups):
         stops = sorted(groups[st], key=_num)
@@ -393,10 +433,9 @@ def calllist(list_id: int, campaign_id: int = DEFAULT_CID) -> dict:
     if not lst:
         raise HTTPException(status_code=404, detail="list not found")
     rows = []
-    for vid in lst["voter_ids"]:
-        v = BY_ID.get(vid)
-        if v and v.phone and not v.protected:
-            rows.append({**voter_row(v), "phone": v.phone, "tags": DB.tags_for_voter(campaign_id, vid)})
+    for v in _get_voters(lst["voter_ids"]):
+        if v.phone and not v.protected:
+            rows.append({**voter_row(v), "phone": v.phone, "tags": DB.tags_for_voter(campaign_id, v.voter_id)})
     return {"list_id": list_id, "name": lst["name"], "count": len(rows), "results": rows,
             "data_provenance": STORE.provenance}
 
@@ -410,7 +449,7 @@ def audit(campaign_id: int = DEFAULT_CID, limit: int = 20) -> dict:
 @app.post("/lists")
 def save_list(req: SaveListRequest, request: Request) -> dict:
     _require_member(request, req.campaign_id)
-    _, matched = _run_query(req.query)
+    _, matched, _total = _segment(req.query)
     lid = DB.save_list(req.campaign_id, req.name, req.query, [v.voter_id for v in matched])
     DB.log_action(req.campaign_id, "list.saved", f"{req.name} ({len(matched)} voters)")
     return {"id": lid, "name": req.name, "count": len(matched)}
@@ -426,7 +465,7 @@ def get_list(list_id: int) -> dict:
     l = DB.get_list(list_id)
     if not l:
         raise HTTPException(status_code=404, detail="list not found")
-    rows = [voter_row(BY_ID[vid]) for vid in l["voter_ids"] if vid in BY_ID]
+    rows = [voter_row(v) for v in _get_voters(l["voter_ids"])]
     return {"id": l["id"], "name": l["name"], "query": l["query"], "count": l["count"],
             "created": l["created"], "data_provenance": STORE.provenance, "results": rows}
 
@@ -493,7 +532,19 @@ async def admin_load_voters(request: Request, registration: UploadFile = File(..
             hp = _os.path.join(td, "hist.zip")
             open(hp, "wb").write(await history.read())
         try:
+            if PGS:
+                from .store import _read_all_txt_from_zip
+                out = _PS.load_extract_lines(_read_all_txt_from_zip(rp),
+                                             _read_all_txt_from_zip(hp) if hp else [])
+                if out["loaded"] == 0:
+                    raise HTTPException(status_code=422, detail="no voters parsed — is this the official registration extract?")
+                UNIVERSE = PGS.universe()
+                TURNOUT_BASIS = f"share of the {len(UNIVERSE)} general elections present in the loaded dataset"
+                DB.log_action(0, "admin.voters_loaded", f"{out['loaded']} voters into Postgres by {u['email']}")
+                return {"loaded": out["loaded"], "provenance": "real", "general_elections": len(UNIVERSE)}
             new_store = VoterStore.from_fl_zip(rp, hp)
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"could not parse the extract: {e}")
     if len(new_store) == 0:
@@ -597,11 +648,12 @@ def petition(list_id: int) -> dict:
     l = DB.get_list(list_id)
     if not l:
         raise HTTPException(status_code=404, detail="list not found")
-    voters = [BY_ID[vid] for vid in l["voter_ids"] if vid in BY_ID]
+    voters = _get_voters(l["voter_ids"])
     rows = PET.prefilled_rows(voters)
     return {"list_id": list_id, "name": l["name"], "rows": rows, "count": len(rows), "data_provenance": STORE.provenance}
 
 
 @app.post("/petition/validate")
 def petition_validate(req: SigRequest) -> dict:
-    return PET.validate_signature(req.name, STORE.all())
+    pool = PGS.search(req.name.strip().lower(), 500) if PGS else STORE.all()
+    return PET.validate_signature(req.name, pool)
