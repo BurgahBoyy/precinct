@@ -237,6 +237,17 @@
           <div class="legend" style="padding:9px 16px;margin:0;border-top:1px solid var(--line)">The voter universe by county — bubbles scale with registered voters ◈ derived from the loaded records.</div>
         </div>
         <div class="kpis" id="kpis" style="margin-top:16px"></div>
+        <div class="card" style="border:1px solid #c7b8f7;background:linear-gradient(180deg,var(--card),#faf8ff)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <h3 style="margin:0">The Director <span class="ai-pill" style="vertical-align:2px">✦ runs the chase</span></h3>
+            <span class="no-print" style="display:flex;gap:8px">
+              <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV('todays-plan.csv',window._lastDirActions)">⬇ CSV</button>
+              <button class="btn" id="dirbtn" onclick="runDirector()">Generate today's plan ▶</button>
+            </span>
+          </div>
+          <div class="sub">Precinct doesn't just show the chase — it runs it: who to contact first, by which channel, with the message already written. AI plans from aggregates only; names are merged on your machine.</div>
+          <div id="dirout"></div>
+        </div>
         <div class="card" style="margin-top:16px">
           <h3>Registered voters by party</h3>
           <div class="sub">Derived — counts computed from the loaded records.</div>
@@ -803,6 +814,39 @@ async function commitDraft(){
   var iso='2026-01-01'; if(dr.date){var p=dr.date.split('/'); if(p.length===3){var y=p[2].length===2?('20'+p[2]):p[2]; iso=y+'-'+('0'+p[0]).slice(-2)+'-'+('0'+p[1]).slice(-2);}}
   await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||'',campaign_id:CID})});
   document.getElementById('fin-intake').value=''; document.getElementById('fin-draft').innerHTML='<div style="color:var(--good);font-size:13px">✓ Added to ledger after your review.</div>'; loadFinance();
+}
+async function runDirector(){
+  var btn=document.getElementById('dirbtn'); btn.disabled=true; btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Planning…';
+  var out=document.getElementById('dirout');
+  out.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px"><span class="spin"></span> The Director is building today’s plan…</div>';
+  try{
+    var d=await (await fetch(API+'/director/brief'+cidq(),{method:'POST'})).json();
+    window._lastDirActions=(d.actions||[]).map(function(a){return {priority:a.priority,segment:a.segment,channel:a.channel,name:a.name,phone:a.phone,address:a.address,days_out:a.days_out,turnout_pct:a.turnout_pct,message:a.message};});
+    var pill=d.method==='claude'?'<span class="ai-pill">✦ Planned by Claude</span>':'<span class="rule-pill">rule-based plan · offline</span>';
+    var segs=(d.segments||[]).map(function(s){return '<span class="chip" title="'+esc(s.meaning)+'">'+s.key+' · '+s.count+'</span>';}).join('');
+    var rows=(d.actions||[]).slice(0,15).map(function(a){
+      var cls=pc[a.party]?('p-'+a.party):'p-NPA';
+      return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:6px 0;background:var(--card)">'
+        +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">'
+        +'<div><b>'+esc(a.name)+'</b> <span class="pill '+cls+'">'+a.party+'</span> <span class="chip">'+a.segment+'</span> <span class="chip">'+(a.channel==='call'?'☎ call':'➤ knock')+'</span>'
+        +'<div class="muted" style="font-size:12px">'+(a.channel==='call'?('<span class="mono">'+esc(a.phone)+'</span>'):esc(a.address))
+        +' · ballot out <span class="mono">'+(a.days_out==null?'?':a.days_out)+'d</span> · turnout <span class="mono">'+a.turnout_pct+'%</span></div></div>'
+        +'<button class="btn ghost no-print" style="padding:6px 11px;font-size:12px" onclick="copyMsg(this,\''+a.voter_id+'\')">📋 copy message</button></div>'
+        +'<div class="muted" id="msg-'+a.voter_id+'" style="font-size:12.5px;margin-top:6px;border-left:3px solid #c7b8f7;padding-left:9px">'+esc(a.message)+'</div>'
+        +'</div>';
+    }).join('');
+    var more=(d.actions||[]).length>15?('<div class="muted" style="font-size:12px;margin-top:6px">+'+((d.actions||[]).length-15)+' more in the CSV.</div>'):'';
+    out.innerHTML='<div style="margin:12px 0 8px">'+pill+'</div>'
+      +'<div style="font-size:14px;line-height:1.6;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card)">'+esc(d.brief)+'</div>'
+      +'<div style="margin:10px 0 4px">'+segs+'</div>'
+      +((d.actions||[]).length?rows+more:'<div class="empty"><span class="big">✓</span>Nothing to chase — every supporter ballot is banked.</div>')
+      +'<div class="legend">Season data: '+esc(d.season_provenance||'')+' · '+esc(d.note||'')+'</div>';
+  }catch(e){out.innerHTML='<div class="warnrow">⚠ Could not build the plan — try again.</div>';}
+  btn.disabled=false; btn.innerHTML='Generate today’s plan ▶';
+}
+function copyMsg(btn,vid){
+  var el=document.getElementById('msg-'+vid); if(!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function(){btn.textContent='✓ copied';setTimeout(function(){btn.innerHTML='📋 copy message';},1400);});
 }
 async function loadChase(){
   try{
