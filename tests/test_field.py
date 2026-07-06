@@ -54,3 +54,25 @@ def test_walklist_has_illustrative_coords():
     assert isinstance(stop["lat"], float) and isinstance(stop["lng"], float)
     assert "illustrative" in d["positions"]
     assert 24.0 < stop["lat"] < 31.5 and -88.0 < stop["lng"] < -79.0   # inside Florida
+
+
+def test_sql_store_expresses_every_parser_label():
+    """AUDIT FIX #3/#4 (default suite, no Postgres): the SQL voter store must be able
+    to express every filter the NL parser emits — otherwise segment() would silently
+    return an over-broad turf. Catches that regression at build time."""
+    from datetime import date
+    from precinct import nl_targeting as NL
+    from precinct import pg_store as PS
+    queries = [
+        "low-propensity Republican men under 40 in Duval county who voted by mail",
+        "Democratic women over 50 in Miami-Dade who skipped 2022",
+        "NPA voters 30-45 who voted in 2020",
+        "active Libertarians in HD 12", "Greens in senate district 8",
+        "inactive voters in congressional district 3", "everyone",
+    ]
+    unmatched = []
+    for q in queries:
+        for lbl in NL.parse(q, as_of=date(2026, 7, 6)).filters:
+            if not PS.can_express(lbl):
+                unmatched.append((q, lbl))
+    assert not unmatched, f"NL labels the SQL store can't express (would broaden turf): {unmatched}"
