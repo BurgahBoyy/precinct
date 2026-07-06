@@ -52,10 +52,10 @@
   .badge{font-size:12px;padding:5px 11px;border-radius:20px;font-weight:600}
   .badge.sample{background:var(--warnbg);color:var(--warn);border:1px solid #fed7aa}
   .badge.real{background:#ecfdf5;color:var(--good);border:1px solid #a7f3d0}
-  .content{padding:22px 24px 60px;max-width:1080px;width:100%}
+  .content{padding:24px 32px 64px;max-width:1600px;width:100%;margin:0 auto}
   /* cards */
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
   .kpi b{display:block;font-family:var(--display);font-variant-numeric:tabular-nums;font-size:27px;font-weight:700;line-height:1.1}
   .kpi small{color:var(--muted);font-size:12.5px}
@@ -276,6 +276,13 @@
   [data-theme="dark"] .card:hover{box-shadow:0 10px 30px rgba(0,0,0,.5)}
   [data-theme="dark"] tbody tr:hover{background:rgba(96,165,250,.10)}
   [data-theme="dark"] .top h1{background:linear-gradient(90deg,var(--ink),#9ec2ff); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  /* toggle switch (Director auto-run) */
+  .switch{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+  .switch input{appearance:none;-webkit-appearance:none;width:34px;height:19px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;transition:background .18s;flex:none;margin:0}
+  .switch input:checked{background:var(--blue)}
+  .switch input:before{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
+  .switch input:checked:before{transform:translateX(15px)}
+  .switch input:focus-visible{outline:none;box-shadow:var(--ring)}
   @media(prefers-reduced-motion:reduce){.nav:hover{padding-left:12px} .card:hover,.kpi:hover,.btn:hover,.btn:active{transform:none}}
 
 </style>
@@ -318,15 +325,15 @@
         </div>
         <div class="kpis" id="kpis" style="margin-top:16px"></div>
         <div class="card" style="border:1px solid #c7b8f7;background:linear-gradient(180deg,var(--card),#faf8ff)">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-            <h3 style="margin:0">The Director <span class="ai-pill" style="vertical-align:2px">✦ runs the chase</span></h3>
-            <span class="no-print" style="display:flex;gap:8px">
-              <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV('todays-plan.csv',window._lastDirActions)">⬇ CSV</button>
-              <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer" title="Run automatically every morning and save the plan">
-                <input type="checkbox" id="dir-auto" onchange="setDirectorAuto(this.checked)" style="width:15px;height:15px"> Run every morning
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 style="margin:0;display:flex;align-items:center;gap:8px;white-space:nowrap">The Director <span class="ai-pill">✦ runs the chase</span></h3>
+            <div class="no-print" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label class="switch" title="Run automatically every morning and save the plan">
+                <input type="checkbox" id="dir-auto" onchange="setDirectorAuto(this.checked)"> <span>Run every morning</span>
               </label>
-              <button class="btn" id="dirbtn" onclick="runDirector()">Generate today's plan ▶</button>
-            </span>
+              <button class="btn ghost" style="white-space:nowrap" onclick="dlCSV('todays-plan.csv',window._lastDirActions)">⬇ CSV</button>
+              <button class="btn" id="dirbtn" style="white-space:nowrap" onclick="runDirector()">Generate today's plan ▶</button>
+            </div>
           </div>
           <div class="sub">Precinct doesn't just show the chase — it <b>runs</b> it, and can run itself every morning: who to contact first, by which channel, with the message already written. AI plans from aggregates only; names are merged on your machine.</div>
           <div id="dir-status" class="legend" style="margin:0 0 6px;border:0;padding:0"></div>
