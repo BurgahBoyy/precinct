@@ -141,6 +141,31 @@ def _seed_supporter_chase(voter_ids, election: str = "2026-11-03-GEN"):
         BAL.upsert_status(rows, provenance="illustrative")
 
 
+def _ensure_demo_chase(cid: int):
+    """Idempotently guarantee the demo campaign shows a lively, balanced Director chase
+    (~18 supporters spread 6 OVERDUE / 6 AGING / 6 FRESH, anchored to TODAY). Runs every boot
+    for illustrative sample data — because campaigns/ballots persist in Cloud SQL, a first-boot-only
+    seed would never refresh. Never fires once a REAL voter file is loaded (provenance flips)."""
+    try:
+        tagged = DB.tagged_voters(cid)
+        sup = [t["voter_id"] for t in tagged if t["tag"] in ("support", "lean")]
+        if len(sup) < 18:
+            pool = []
+            for lst in DB.get_lists(cid):
+                pool += lst.get("voter_ids", [])
+            if len(pool) < 18:
+                pool += [v.voter_id for v in (PGS.first(400) if PGS else STORE.all())]
+            for vid in pool:
+                if vid not in sup:
+                    DB.add_tag(cid, vid, "support" if len(sup) % 3 else "lean")
+                    sup.append(vid)
+                if len(sup) >= 18:
+                    break
+        _seed_supporter_chase(sup[:18])
+    except Exception:
+        pass
+
+
 def _bootstrap():
     DB.conn()
     fresh = not DB.list_campaigns()
@@ -175,11 +200,11 @@ def _bootstrap():
             DB.add_tag(cid, vid, "support" if i % 3 else "lean")
     from . import ballots as BAL
     BAL.init_schema()
-    if STORE.provenance == "illustrative" and BAL.current_election() is None:
-        ids = [v.voter_id for v in (PGS.first(1000) if PGS else STORE.all())]
-        BAL.seed_illustrative_season(ids)
-    if fresh and sup_ids:
-        _seed_supporter_chase(sup_ids)
+    if STORE.provenance == "illustrative":
+        if BAL.current_election() is None:
+            ids = [v.voter_id for v in (PGS.first(1000) if PGS else STORE.all())]
+            BAL.seed_illustrative_season(ids)
+        _ensure_demo_chase(cid if fresh else DEFAULT_CID)
 
 
 # ---------- voter serialization ----------
