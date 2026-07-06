@@ -731,7 +731,7 @@ async function runTour(){
     _tourScroll('#dirout b','center');
     if(!await beat(9,TOTAL,'Then the ranked chase: each supporter in priority order \u2014 call or knock, days their ballot has been out, turnout odds \u2014 and the outreach message ALREADY WRITTEN, in your voice. A human just hits copy. (The AI sees only aggregates; names are merged on your machine.)',400)) return stopTour();
     var sw=document.getElementById('dir-auto'); _tourScroll(sw?sw.closest('label'):'#dir-status','center'); _tourFlash(sw?sw.closest('label'):null);
-    if(!await beat(10,TOTAL,'And this switch is the whole point: flip \u201cRun every morning\u201d and the Director runs ITSELF at 7am, every day, and emails you the brief. The chase runs while you sleep.',600)) return stopTour();
+    if(!await beat(10,TOTAL,'And this switch is the whole point: flip \u201cRun every morning\u201d and the Director runs ITSELF \u2014 every day, today\u2019s chase is already built and waiting when you open Precinct. The work happens while you sleep.',600)) return stopTour();
     show('dash'); window.scrollTo(0,0);
     await beat(11,TOTAL,'Everything you just saw runs on sample data today. The day the real Florida file loads, it\u2019s 13 million voters in the same tool \u2014 with a manager that works every morning without being asked. That\u2019s Precinct.',900);
   }catch(e){}
@@ -1004,7 +1004,7 @@ async function runDirector(){
     }).join('');
     var more=(d.actions||[]).length>15?('<div class="muted" style="font-size:12px;margin-top:6px">+'+((d.actions||[]).length-15)+' more in the CSV.</div>'):'';
     out.innerHTML='<div style="margin:12px 0 8px">'+pill+'</div>'
-      +'<div style="font-size:14px;line-height:1.6;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card)">'+esc(d.brief)+'</div>'
+      +'<div style="font-size:14px;line-height:1.6;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card)">'+esc(d.brief||'')+'</div>'
       +'<div style="margin:10px 0 4px">'+segs+'</div>'
       +((d.actions||[]).length?rows+more:'<div class="empty"><span class="big">✓</span>Nothing to chase — every supporter ballot is banked.</div>')
       +'<div class="legend">Season data: '+esc(d.season_provenance||'')+' · '+esc(d.note||'')+'</div>';
