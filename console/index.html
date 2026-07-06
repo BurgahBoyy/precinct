@@ -465,7 +465,7 @@ async function switchCampaign(val){
   refreshView();
 }
 function refreshView(){
-  if(VIEW==='dash') loadPulse();
+  if(VIEW==='dash'){ loadPulse(); loadDirectorStatus(); }
   if(VIEW==='lists') loadLists();
   if(VIEW==='finance') loadFinance();
   if(VIEW==='field') loadFieldPicker();
@@ -659,6 +659,7 @@ async function boot(){
     animateKpis(document.getElementById('v-dash'));
     sweepBars(document.getElementById('v-dash'));
     loadPulse();
+    loadDirectorStatus();
     runTarget();
   }catch(e){
     document.getElementById('banner').classList.remove('hide');
@@ -842,7 +843,7 @@ async function runDirector(){
       +((d.actions||[]).length?rows+more:'<div class="empty"><span class="big">✓</span>Nothing to chase — every supporter ballot is banked.</div>')
       +'<div class="legend">Season data: '+esc(d.season_provenance||'')+' · '+esc(d.note||'')+'</div>';
   }catch(e){out.innerHTML='<div class="warnrow">⚠ Could not build the plan — try again.</div>';}
-  btn.disabled=false; btn.innerHTML='Generate today’s plan ▶';
+  btn.disabled=false; btn.innerHTML='Generate today’s plan ▶'; loadDirectorStatus();
 }
 function copyMsg(btn,vid){
   var el=document.getElementById('msg-'+vid); if(!el) return;
