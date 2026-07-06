@@ -116,9 +116,36 @@ REDACTED = "[protected]"
 DEFAULT_CID = 1
 
 
+def _seed_supporter_chase(voter_ids, election: str = "2026-11-03-GEN"):
+    """Guarantee the demo's tagged supporters have OUTSTANDING ballots spread across urgency bands
+    (OVERDUE >14d · AGING 7-14d · FRESH <7d), so the Director always opens to a lively, realistic
+    chase on every cold Cloud Run instance — not an empty 'nothing to chase' or an all-FRESH list.
+    Labeled illustrative like the rest of the sample season."""
+    from datetime import timedelta
+
+    from . import ballots as BAL
+    rows = []
+    for i, vid in enumerate(voter_ids):
+        band = i % 3
+        if band == 0:
+            days = 18 + (i % 8)          # OVERDUE (18-25 days out)
+        elif band == 1:
+            days = 9 + (i % 5)           # AGING (9-13 days out)
+        else:
+            days = 2 + (i % 4)           # FRESH (2-5 days out)
+        sent = (TODAY - timedelta(days=days)).isoformat()
+        req = (TODAY - timedelta(days=days + 7)).isoformat()
+        rows.append({"voter_id": vid, "election": election, "requested": req,
+                     "sent": sent, "returned": "", "early_voted": ""})
+    if rows:
+        BAL.upsert_status(rows, provenance="illustrative")
+
+
 def _bootstrap():
     DB.conn()
-    if not DB.list_campaigns():
+    fresh = not DB.list_campaigns()
+    sup_ids = []
+    if fresh:
         cid = DB.create_campaign("Demo Campaign", "other")
         seeds = [
             ("Alice Kim", "500", "2026-05-10", "general", "check", "12 Palm Ave, Orlando FL", "1180"),
@@ -135,13 +162,24 @@ def _bootstrap():
         lst_q = "NPA voters 30-45 who voted by mail"
         _, matched, _t = _segment(lst_q)
         DB.save_list(cid, "Persuasion turf — mail-first NPAs", lst_q, [v.voter_id for v in matched])
-        for vid, tg in zip([v.voter_id for v in matched][:3], ["support", "lean", "undecided"]):
-            DB.add_tag(cid, vid, tg)
+        # Robust supporter set (~18) so the Director's chase is always populated.
+        pool = [v.voter_id for v in matched]
+        if len(pool) < 18:
+            for v in (PGS.first(400) if PGS else STORE.all()):
+                if v.voter_id not in pool:
+                    pool.append(v.voter_id)
+                if len(pool) >= 18:
+                    break
+        sup_ids = pool[:18]
+        for i, vid in enumerate(sup_ids):
+            DB.add_tag(cid, vid, "support" if i % 3 else "lean")
     from . import ballots as BAL
     BAL.init_schema()
     if STORE.provenance == "illustrative" and BAL.current_election() is None:
         ids = [v.voter_id for v in (PGS.first(1000) if PGS else STORE.all())]
         BAL.seed_illustrative_season(ids)
+    if fresh and sup_ids:
+        _seed_supporter_chase(sup_ids)
 
 
 # ---------- voter serialization ----------
@@ -522,6 +560,64 @@ def director_brief(campaign_id: int = DEFAULT_CID) -> dict:
             "actions": DIR.merged_actions(plan, templates),
             "season_provenance": plan["season_provenance"],
             "note": "AI saw aggregates only; names were merged into templates locally. Human sends every message."}
+
+
+class DirectorScheduleRequest(BaseModel):
+    enabled: bool = False
+    hour: int = 7
+    email: str = ""
+
+
+@app.post("/director/run")
+def director_run(campaign_id: int = DEFAULT_CID) -> dict:
+    """v2 agentic run: build today's plan, generate the brief, PERSIST a dated snapshot, and return it.
+    Same rich payload the console renders — but recorded so the campaign keeps a history of runs."""
+    from . import director as DIR
+    return DIR.run_and_store(campaign_id, _get_voters, today=TODAY)
+
+
+@app.get("/director/latest")
+def director_latest(campaign_id: int = DEFAULT_CID) -> dict:
+    return {"run": DB.get_latest_director_run(campaign_id)}
+
+
+@app.get("/director/runs")
+def director_runs(campaign_id: int = DEFAULT_CID, limit: int = 10) -> dict:
+    return {"runs": DB.get_director_runs(campaign_id, limit)}
+
+
+@app.get("/director/schedule")
+def director_schedule_get(campaign_id: int = DEFAULT_CID) -> dict:
+    sched = DB.get_director_schedule(campaign_id) or {"campaign_id": campaign_id, "enabled": 0, "hour": 7, "email": "", "last_run": None}
+    return {"schedule": sched}
+
+
+@app.post("/director/schedule")
+def director_schedule_set(req: DirectorScheduleRequest, campaign_id: int = DEFAULT_CID) -> dict:
+    DB.set_director_schedule(campaign_id, req.enabled, req.hour, req.email)
+    DB.log_action(campaign_id, "director.schedule", f"auto-run {'ON' if req.enabled else 'off'} @ {req.hour}:00")
+    return {"schedule": DB.get_director_schedule(campaign_id)}
+
+
+@app.post("/director/run-scheduled")
+def director_run_scheduled(request: Request) -> dict:
+    """The morning heartbeat: token-guarded so only the scheduler can fire it. Runs every campaign
+    with auto-run enabled and persists each plan, so the day's chase is waiting when the manager opens Precinct."""
+    want = _os.environ.get("PRECINCT_CRON_TOKEN", "")
+    got = request.headers.get("X-Precinct-Cron", "")
+    if not want or got != want:
+        raise HTTPException(status_code=403, detail="scheduler token required")
+    from . import director as DIR
+    ran = []
+    for row in DB.all_enabled_schedules():
+        cid = row["campaign_id"]
+        try:
+            out = DIR.run_and_store(cid, _get_voters, today=TODAY)
+            DB.mark_director_ran(cid, TODAY.isoformat())
+            ran.append({"campaign_id": cid, "outstanding": out["outstanding"], "actions": len(out["actions"]), "method": out["method"]})
+        except Exception as e:
+            ran.append({"campaign_id": cid, "error": str(e)[:120]})
+    return {"ran": ran, "count": len(ran)}
 
 
 @app.get("/audit")
