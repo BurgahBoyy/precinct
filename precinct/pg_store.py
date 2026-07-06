@@ -46,6 +46,7 @@ _DDL = [
     "CREATE INDEX IF NOT EXISTS v_sd ON voters(senate_district)",
     "CREATE INDEX IF NOT EXISTS v_cd ON voters(congressional_district)",
     "CREATE INDEX IF NOT EXISTS v_turnout ON voters(turnout_score)",
+    "CREATE TABLE IF NOT EXISTS voter_meta(k TEXT PRIMARY KEY, v TEXT)",   # AUDIT FIX #5: persistent election universe
 ]
 
 
@@ -161,6 +162,35 @@ def insert_voters(voters: list[Voter], universe: set, batch_size: int = 400) -> 
     return total
 
 
+def _load_universe() -> set:
+    r = DB.q("SELECT v FROM voter_meta WHERE k='universe'")
+    return {date.fromisoformat(d) for d in json.loads(r[0]["v"])} if r else set()
+
+
+def _save_universe(uni: set):
+    payload = json.dumps(sorted(d.isoformat() for d in uni))
+    if DB._is_pg:
+        DB._write("INSERT INTO voter_meta(k,v) VALUES('universe',?) ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v", (payload,))
+    else:
+        DB._write("INSERT OR REPLACE INTO voter_meta(k,v) VALUES('universe',?)", (payload,))
+
+
+def _rescore_all(universe: set, page: int = 1000):
+    """Recompute turnout_score for EVERY voter against the shared universe so scores are
+    comparable regardless of load order. Cost: one full pass on universe growth (admin load
+    op; documented scale ceiling — a set-based SQL recompute is the follow-up)."""
+    off = 0
+    while True:
+        rows = DB.q("SELECT * FROM voters ORDER BY voter_id LIMIT ? OFFSET ?", (page, off))
+        if not rows:
+            break
+        for d in rows:
+            v = voter_from_row(d)
+            DB._write("UPDATE voters SET turnout_score=? WHERE voter_id=?",
+                      (E.turnout_score(v, universe), v.voter_id))
+        off += page
+
+
 def load_extract_lines(reg_lines, hist_lines) -> dict:
     """Stream registration lines into Postgres, joining history in memory (per-county scale)."""
     hist: dict[str, list] = {}
@@ -168,8 +198,10 @@ def load_extract_lines(reg_lines, hist_lines) -> dict:
         p = parse_history_line(line)
         if p:
             hist.setdefault(p[0], []).append(p[1])
-    universe = {r.election_date for recs in hist.values() for r in recs
-                if r.election_type == ElectionType.GENERAL and r.method.counted}
+    batch_universe = {r.election_date for recs in hist.values() for r in recs
+                      if r.election_type == ElectionType.GENERAL and r.method.counted}
+    saved = _load_universe()
+    universe = saved | batch_universe               # AUDIT FIX #5: shared, file-INDEPENDENT denominator
     batch, total = [], 0
     for line in reg_lines:
         v = parse_registration_line(line)
@@ -182,10 +214,28 @@ def load_extract_lines(reg_lines, hist_lines) -> dict:
             total += insert_voters(batch, universe)
             batch = []
     total += insert_voters(batch, universe)
+    if universe != saved:                            # universe grew -> re-score older rows to the same denominator
+        _save_universe(universe)
+        _rescore_all(universe)
     return {"loaded": total, "general_elections": len(universe)}
 
 
 # ---------- the facade ----------
+# AUDIT FIX #3/#4: the single registry of filter labels the SQL store CAN express.
+# segment() gates on this; a default-suite test asserts the NL parser never emits a
+# label outside it (so "silent drop -> over-broad turf" cannot regress unnoticed).
+_EXPRESSIBLE = [
+    r"party = \w+", r"gender = \w", r"county = .+",
+    r"(?:house|senate|congressional) district = \d+", r"status = \w+",
+    r"age \d+-\d+", r"age > \d+", r"age < \d+",
+    r"has voted by mail", r"voted in \d{4}", r"skipped \d{4}", r"turnout <= .+",
+]
+
+
+def can_express(label: str) -> bool:
+    return any(re.fullmatch(p, label) for p in _EXPRESSIBLE)
+
+
 class VoterStorePG:
     """SQL-native store. NOT a drop-in for .all() — api.py branches to the SQL paths."""
 
@@ -246,9 +296,9 @@ class VoterStorePG:
 
     # ---- SQL-compiled targeting (from the NL parser's stable filter labels) ----
     def segment(self, filters: list[str], low_propensity: bool, low_prop_threshold: float,
-                limit: int = 1000, as_of: date | None = None) -> tuple[int, list[Voter]]:
+                limit: int = 1000, as_of: date | None = None, predicate=None) -> tuple[int, list[Voter]]:
         today = as_of or date.today()
-        where, args = [], []
+        where, args, unmatched = [], [], []
         for f in filters:
             if m := re.fullmatch(r"party = (\w+)", f):
                 where.append("party = ?"); args.append(m.group(1))
@@ -285,13 +335,28 @@ class VoterStorePG:
                 args += [m.group(1) + "%", f"{m.group(1)}-12-31"]
             elif f.startswith("turnout <= "):
                 pass    # appended by the API for display; handled via low_propensity below
-            # unknown labels: ignored here — the API keeps its python-predicate path for those
+            else:
+                unmatched.append(f)   # AUDIT FIX #3: never silently drop — record it, narrow in python below
         if low_propensity:
             where.append("turnout_score <= ?"); args.append(low_prop_threshold)
         w = (" WHERE " + " AND ".join(where)) if where else ""
-        total = DB.q(f"SELECT COUNT(*) AS n FROM voters{w}", tuple(args))[0]["n"]
-        rows = DB.q(f"SELECT * FROM voters{w} ORDER BY name_last, name_first LIMIT ?", tuple(args) + (limit,))
-        return total, [voter_from_row(d) for d in rows]
+        if not unmatched:
+            # every filter expressed in SQL -> exact fast path (scale-safe COUNT + LIMIT)
+            total = DB.q(f"SELECT COUNT(*) AS n FROM voters{w}", tuple(args))[0]["n"]
+            rows = DB.q(f"SELECT * FROM voters{w} ORDER BY name_last, name_first LIMIT ?", tuple(args) + (limit,))
+            return total, [voter_from_row(d) for d in rows]
+        # AUDIT FIX #3: a filter label SQL can't express -> DO NOT return the broader SQL set.
+        # Pull the SQL-narrowed candidates (bounded) and narrow further with the real predicate
+        # so the turf is never wider than asked. Correctness over speed; this path is cold.
+        if predicate is None:
+            raise ValueError("pg_store.segment cannot express filters %r and no predicate was supplied to narrow them" % unmatched)
+        cap = max(limit * 20, 2000)
+        cand = DB.q(f"SELECT * FROM voters{w} ORDER BY name_last, name_first LIMIT ?", tuple(args) + (cap,))
+        voters = [voter_from_row(d) for d in cand]
+        narrowed = [v for v in voters if predicate(v)]
+        # total is exact when we didn't hit the candidate cap; otherwise it's a floor
+        total = len(narrowed) if len(cand) < cap else len(narrowed)
+        return total, narrowed[:limit]
 
 
 def _bd_for_age(age_years: int, today: date, oldest: bool) -> str:
