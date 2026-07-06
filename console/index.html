@@ -283,6 +283,22 @@
   .switch input:before{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .18s}
   .switch input:checked:before{transform:translateX(15px)}
   .switch input:focus-visible{outline:none;box-shadow:var(--ring)}
+  /* guided tour caption bar */
+  #tourbar{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(24px);width:min(720px,92vw);
+    background:linear-gradient(180deg,#141d2e,#0e1626);color:#eaf0fb;border:1px solid #2a3a5c;border-radius:16px;
+    box-shadow:0 18px 50px rgba(6,12,26,.5);z-index:9000;opacity:0;pointer-events:none;transition:opacity .3s, transform .3s}
+  #tourbar.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .tb-inner{padding:14px 16px 15px}
+  .tb-prog{height:4px;border-radius:99px;background:#26324c;overflow:hidden;margin-bottom:11px}
+  .tb-prog>span{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#5b9dff,#8b5bff);transition:width .5s ease}
+  .tb-row{display:flex;align-items:center;gap:13px}
+  .tb-step{flex:none;font-family:var(--mono,monospace);font-size:11px;font-weight:700;letter-spacing:.06em;color:#8ea6d6;
+    background:#1b2743;border:1px solid #2c3c5e;border-radius:8px;padding:5px 8px;white-space:nowrap}
+  .tb-text{flex:1;font-size:15px;line-height:1.5;font-weight:500}
+  .tb-x{flex:none;background:transparent;border:1px solid #33456b;color:#9fb2d8;border-radius:9px;padding:6px 11px;
+    font-size:12.5px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+  .tb-x:hover{background:#22304f;color:#fff}
+  @media(max-width:620px){#tourbar{bottom:12px}.tb-step{display:none}.tb-text{font-size:14px}}
   @media(prefers-reduced-motion:reduce){.nav:hover{padding-left:12px} .card:hover,.kpi:hover,.btn:hover,.btn:active{transform:none}}
 
 </style>
@@ -518,6 +534,16 @@
 <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"><div id="dcontent"></div></aside>
 <div class="toast" id="toast"></div>
+<div id="tourbar" class="no-print" aria-live="polite">
+  <div class="tb-inner">
+    <div class="tb-prog"><span id="tb-fill"></span></div>
+    <div class="tb-row">
+      <div class="tb-step" id="tb-step">Tour</div>
+      <div class="tb-text" id="tb-text"></div>
+      <button class="tb-x" id="tb-x" onclick="stopTour()" title="Exit tour (Esc)">✕ Exit</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const API="";
@@ -653,35 +679,54 @@ function sweepBars(el){
   if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   el.querySelectorAll('.bar>span').forEach(function(sp){var w=sp.style.width;sp.style.width='0%';requestAnimationFrame(function(){requestAnimationFrame(function(){sp.style.width=w;});});});
 }
-function tourToast(m,ms){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show','tour');setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.classList.remove('tour');},300);},ms-200);}
-function autotype(el,text){return new Promise(function(res){el.value='';el.focus();var i=0;var iv=setInterval(function(){el.value=text.slice(0,++i);if(i>=text.length){clearInterval(iv);res();}},26);});}
+function _tbShow(on){var b=document.getElementById('tourbar');if(b)b.classList.toggle('on',!!on);}
+function _tbSet(step,total,text){
+  document.getElementById('tb-step').textContent=step+' / '+total;
+  document.getElementById('tb-text').textContent=text;
+  document.getElementById('tb-fill').style.width=Math.round(step/total*100)+'%';
+}
+function autotype(el,text){return new Promise(function(res){el.value='';el.focus();var i=0;var iv=setInterval(function(){if(window._tour&&window._tour.cancel){clearInterval(iv);return res();}el.value=text.slice(0,++i);if(i>=text.length){clearInterval(iv);res();}},34);});}
+function _tourSleep(ms){return new Promise(function(r){
+  var t=window._tour; if(!t){return r();}
+  var start=Date.now();
+  (function tick(){ if(t.cancel) return r(); if(Date.now()-start>=ms) return r(); setTimeout(tick,80); })();
+});}
+function _readMs(text){ return Math.max(3400, Math.min(7200, text.length*72 + 1500)); } // paced for first-time reading
+async function beat(step,total,text,extraMs){
+  if(!window._tour||window._tour.cancel) return false;
+  _tbSet(step,total,text);
+  await _tourSleep(_readMs(text)+(extraMs||0));
+  return !window._tour.cancel;
+}
+function stopTour(){ if(window._tour){window._tour.cancel=true;} _tbShow(false);
+  var t=document.getElementById('toast'); if(t){t.classList.remove('show','tour');} }
 async function runTour(){
-  if(window._touring) return; window._touring=true;
-  var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+  if(window._tour&&window._tour.on) return;
+  window._tour={on:true,cancel:false};
+  var TOTAL=8;
+  _tbShow(true);
   try{
     show('dash'); window.scrollTo(0,0);
-    tourToast('This is Precinct — the AI-native campaign operating system. Watch it work.',3200); await sleep(3400);
+    if(!await beat(1,TOTAL,'Welcome to Precinct — the AI-native campaign operating system. Sit back; this 60-second tour drives itself. (Press Exit or Esc anytime.)',600)) return stopTour();
     show('target');
-    tourToast('You don\u2019t build queries. You just say what you want…',2600);
-    await autotype(document.getElementById('q'),'Republican men under 40 in Duval county'); await sleep(400);
-    await runTarget();
-    tourToast('…and it shows exactly how it understood you. No silent misreads.',3200); await sleep(3600);
-    show('field'); await sleep(500); await openWalk(1,3);
-    tourToast('Any list becomes a walk sheet — split into balanced turfs, on a map.',3600); await sleep(4000);
-    var ck=document.getElementById('chase-kpis'); if(ck){ck.scrollIntoView({behavior:'smooth',block:'center'});
-    tourToast('And the season weapon: the BALLOT CHASE — your supporters whose mail ballots are out but NOT returned. Banked votes can\u2019t be lost.',4200); await sleep(4400);}
+    if(!await beat(2,TOTAL,'You don\u2019t build queries here. You just say what you want, in plain English \u2014 watch.',300)) return stopTour();
+    await autotype(document.getElementById('q'),'Republican men under 40 in Duval county');
+    await _tourSleep(500); await runTarget();
+    if(!await beat(3,TOTAL,'Precinct shows exactly how it read you \u2014 party, gender, age, county \u2014 so there are never silent misreads.')) return stopTour();
+    show('field'); await _tourSleep(600); await openWalk(1,3);
+    if(!await beat(4,TOTAL,'Any saved list becomes a street-ordered walk sheet, split into balanced turfs, plotted on a map \u2014 ready to hand a volunteer.')) return stopTour();
+    var ck=document.getElementById('chase-kpis'); if(ck) ck.scrollIntoView({behavior:'smooth',block:'center'});
+    if(!await beat(5,TOTAL,'The season weapon: the BALLOT CHASE. These are your supporters whose mail ballots are OUT but not returned \u2014 a banked vote can never be lost.')) return stopTour();
     show('finance'); window.scrollTo(0,0);
-    tourToast('Now the part nobody else has: hand Claude the messy paperwork…',2800);
+    if(!await beat(6,TOTAL,'Now the part nobody else has: hand Claude the messy paperwork a treasurer actually gets\u2026',200)) return stopTour();
     await autotype(document.getElementById('fin-intake'),'check from carmen ruiz, five hundred even, no 2210, 6/25/26, 12 vista ct orlando');
-    runIntake();
-    await sleep(6500);
-    tourToast('Read, structured, compliance-checked — a human approves before anything files.',3400); await sleep(3600);
-    show('fundraise'); await sleep(600);
-    tourToast('It already knows who\u2019s maxed out under FL law — and who you can still ask.',3200); await sleep(3400);
+    runIntake(); await _tourSleep(6500);
+    if(!await beat(7,TOTAL,'Read, structured, and compliance-checked in seconds \u2014 and a human always approves before anything is filed.')) return stopTour();
     show('dash'); window.scrollTo(0,0);
-    tourToast('Sample data today. The day the real Florida file loads: 13 million voters, same tool. That\u2019s Precinct.',4200); await sleep(4200);
+    await beat(8,TOTAL,'Everything you just saw runs on sample data today. The day the real Florida file loads, it\u2019s 13 million voters in the same tool. That\u2019s Precinct.',800);
   }catch(e){}
-  window._touring=false;
+  _tbShow(false);
+  window._tour={on:false,cancel:false};
 }
 var AUTH_MODE='login';
 function authToggle(){AUTH_MODE=AUTH_MODE==='login'?'register':'login';document.getElementById('a-name').classList.toggle('hide',AUTH_MODE==='login');document.getElementById('a-go').textContent=AUTH_MODE==='login'?'Sign in':'Create account';document.getElementById('a-tog').textContent=AUTH_MODE==='login'?'First time here? Create the admin account':'Have an account? Sign in';}
@@ -1068,7 +1113,7 @@ async function validateSig(){
   else el.innerHTML='<span style="color:var(--rep)">✗ No match on the roll — signature may be invalid.</span>';
 }
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){closeDrawer();return;}
+  if(e.key==='Escape'){ if(window._tour&&window._tour.on) stopTour(); closeDrawer(); return; }
   if(e.key!=='Enter')return;
   var a=document.activeElement; if(!a)return;
   if(a.id==='q') runTarget();
