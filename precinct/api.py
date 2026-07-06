@@ -30,7 +30,15 @@ from . import hardening as HARD  # noqa: E402
 
 @app.middleware("http")
 async def _auth_gate(request: Request, call_next):
-    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+    # AUDIT FIX #8: X-Forwarded-For is client-controlled from the LEFT; the trustworthy
+    # client IP is the hop the trusted proxy (Cloud Run's front end) appended on the RIGHT.
+    _xff = request.headers.get("x-forwarded-for", "")
+    if _xff:
+        _hops = [p.strip() for p in _xff.split(",") if p.strip()]
+        _n = int(_os.environ.get("PRECINCT_TRUSTED_PROXIES", "1") or 1)
+        ip = _hops[-_n] if len(_hops) >= _n else _hops[0]
+    else:
+        ip = request.client.host if request.client else "?"
     b = HARD.bucket_for(request.url.path, request.method)
     if b and not HARD.allowed(ip, b):
         return JSONResponse({"detail": "rate limit exceeded — slow down"}, status_code=429)
@@ -87,7 +95,7 @@ def _segment(query: str, limit: int = 1000):
     """(parsed, matched, total) — SQL-compiled on the PG store, python engine otherwise."""
     parsed = NL.parse(query, as_of=TODAY, low_propensity_threshold=LOW_PROP)
     if PGS:
-        total, matched = PGS.segment(parsed.filters, parsed.low_propensity, LOW_PROP, limit=limit, as_of=TODAY)
+        total, matched = PGS.segment(parsed.filters, parsed.low_propensity, LOW_PROP, limit=limit, as_of=TODAY, predicate=parsed.predicate)
         return parsed, matched, total
     _, matched = _run_query(query, limit)
     return parsed, matched, len(matched)
