@@ -87,3 +87,35 @@ def test_loader_ingests_official_layout_lines():
     assert out["loaded"] == 5 and store.count() == 5
     assert store.provenance == "real"
     assert store.by_id("900000001").name_first == "Real1"
+
+
+
+def test_universe_is_shared_across_multicounty_loads_AUDIT5():
+    """AUDIT FIX #5: loading a second county whose history adds a new general election
+    must re-score the FIRST county's voters against the shared universe — so turnout is
+    comparable regardless of load order (was: per-file denominator)."""
+    from precinct import pg_store as PS
+    from precinct import db as DB
+    DB._write("DELETE FROM voters"); DB._write("DELETE FROM voter_meta")
+    # county A: one voter, voted GEN 2020 only; batch history has GENs 2020
+    a_reg = ["DAD\t900000100\tSmith\t\tAda\t\tN\t1 A St\t\tMiami\tFL\t33101\t\t\t\t\t\t\t\tF\t5\t01/01/1980\t01/01/2010\tDEM\t001\t\t\t\tACT\t\t\t\t\t\t\t\t\t"]
+    a_hist = ["DAD\t900000100\t11/03/2020\tGEN\tE"]
+    PS.load_extract_lines(a_reg, a_hist)
+    score_before = DB.q("SELECT turnout_score FROM voters WHERE voter_id='900000100'")[0]["turnout_score"]
+    uni_before = len(PS._load_universe())
+    # county B: adds a GEN 2022 to the universe
+    b_reg = ["DAD\t900000200\tJones\t\tBob\t\tN\t2 B St\t\tMiami\tFL\t33101\t\t\t\t\t\t\t\tM\t5\t01/01/1980\t01/01/2010\tREP\t002\t\t\t\tACT\t\t\t\t\t\t\t\t\t"]
+    b_hist = ["DAD\t900000200\t11/08/2022\tGEN\tE"]
+    PS.load_extract_lines(b_reg, b_hist)
+    uni_after = len(PS._load_universe())
+    score_after = DB.q("SELECT turnout_score FROM voters WHERE voter_id='900000100'")[0]["turnout_score"]
+    assert uni_after == uni_before + 1                      # universe grew (2020 -> {2020,2022})
+    # Ada voted 1 of 2 generals now, not 1 of 1 -> her comparable score dropped
+    assert abs(score_after - 0.5) < 1e-6 and score_before > score_after
+    # restore the standard 400-voter seed for later modules
+    from precinct import engine as E
+    from precinct.sample_data import load_sample_voters
+    from precinct.schema import ElectionType
+    DB._write("DELETE FROM voters"); DB._write("DELETE FROM voter_meta")
+    vs = load_sample_voters(400, 42)
+    PS.insert_voters(vs, E.election_universe(vs, types=(ElectionType.GENERAL,)))
