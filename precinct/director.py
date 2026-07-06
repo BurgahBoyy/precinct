@@ -156,6 +156,23 @@ def ai_brief(plan: dict) -> tuple[str, dict, str]:
         return b, t, "rule-based"
 
 
+def run_and_store(campaign_id: int, voters_by_id, today: date | None = None) -> dict:
+    """Director v2: compute today's plan, generate the brief, PERSIST a dated snapshot,
+    and return it. This is what the autonomous heartbeat calls each morning."""
+    plan = build_plan(campaign_id, voters_by_id, today=today)
+    brief, templates, method = ai_brief(plan)
+    actions = merged_actions(plan, templates)
+    snapshot = {"as_of": plan["as_of"], "election": plan["election"],
+                "days_to_election": plan["days_to_election"], "segments": plan["segments"],
+                "banked": plan["banked"], "outstanding": plan["outstanding"],
+                "actions": actions, "season_provenance": plan["season_provenance"]}
+    run_id = DB.save_director_run(campaign_id, plan["as_of"], plan["outstanding"], plan["banked"],
+                                  brief, method, json.dumps(snapshot))
+    DB.log_action(campaign_id, "director.run", f"run #{run_id}: {plan['outstanding']} outstanding, {method}")
+    return {"run_id": run_id, "brief": brief, "method": method, **snapshot,
+            "note": "AI saw aggregates only; names merged locally. Persisted snapshot."}
+
+
 def merged_actions(plan: dict, templates: dict) -> list[dict]:
     """LOCAL mail-merge — names never left this process."""
     out = []
