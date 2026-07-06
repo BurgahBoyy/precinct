@@ -26,7 +26,7 @@ Press ▶ "60-sec tour" in the header and it demos itself.
 
 ## Stack
 Python / FastAPI · Postgres (Cloud SQL) or SQLite · vanilla single-file frontend ·
-Anthropic Claude for the AI seams · Cloud Run. ~55 pytest tests run against BOTH
+Anthropic Claude for the AI seams · Cloud Run. 60 automated tests (SQLite default; the full suite also runs against live Postgres) run against BOTH
 database engines.
 
 ## Run it
