@@ -691,7 +691,7 @@ async function runTarget(){
   const d=await r.json();
   u.innerHTML='<b>Precinct read that as:</b> '+(d.understood.filters.length?d.understood.filters.map(f=>`<span class="chip">${f}</span>`).join(''):'<span class="chip">everyone</span>')+
     (d.ai_note?'<div class="sub" style="color:#7c3aed;margin-top:6px">✦ '+esc(d.ai_note)+'</div>':'')+
-    (d.understood.warnings||[]).map(w=>`<div class="warnrow">⚠ ${w}</div>`).join('');
+    (d.understood.warnings||[]).map(w=>`<div class="warnrow">⚠ ${esc(w)}</div>`).join('');
   const tb=document.querySelector('#ttable tbody');
   tb.innerHTML=d.results.map(row).join('');
   document.getElementById('tresults').classList.remove('hide');
@@ -790,7 +790,7 @@ async function loadFinance(){
   const led=await (await fetch(API+'/finance/contributions'+cidq())).json();
   document.getElementById('fin-kpis').innerHTML=kpi(fmt$(rep.totals.raised),'raised')+kpi(fmt$(rep.totals.spent),'spent')+kpi(fmt$(rep.totals.cash_on_hand),'cash on hand')+kpi(rep.contribution_count,'contributions');
   const flags=rep.compliance_flags||[];
-  document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
+  document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+esc(f.message)+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
   var c=led.contributions||[], e=led.expenses||[];
   window._lastLedgerRows=c.map(function(x){return {type:'in',who:x.donor_name,amount:x.amount,date:x.date,detail:x.phase+' · '+x.method,provenance:x.provenance};}).concat(e.map(function(x){return {type:'out',who:x.payee,amount:x.amount,date:x.date,detail:x.purpose,provenance:x.provenance};}));
   document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+esc(x.donor_name)+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+esc(x.payee)+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+esc(x.purpose)+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
