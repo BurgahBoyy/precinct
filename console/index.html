@@ -870,7 +870,7 @@ async function loadFieldPicker(){
   const d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('walkview').classList.add('hide');
   const w=document.getElementById('field-picker');
-  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="margin:8px 0"><div style="display:flex;justify-content:space-between"><b>'+l.name+'</b><span class="muted">'+l.count+' voters</span></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openWalk('+l.id+')">➤ Walk sheet</button><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openCall('+l.id+')">☎ Call sheet</button></div></div>';}).join('') : '<div class="empty"><span class="big">➤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a>, then walk it here.</div>';
+  w.innerHTML= d.lists.length ? d.lists.map(function(l){return '<div class="card" style="margin:8px 0"><div style="display:flex;justify-content:space-between"><b>'+esc(l.name)+'</b><span class="muted">'+l.count+' voters</span></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openWalk('+l.id+')">➤ Walk sheet</button><button class="btn ghost" style="padding:7px 12px;font-size:12.5px" onclick="openCall('+l.id+')">☎ Call sheet</button></div></div>';}).join('') : '<div class="empty"><span class="big">➤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a>, then walk it here.</div>';
 }
 var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
 function stopCard(x){
@@ -884,12 +884,12 @@ async function openWalk(lid,turfs){
   d.turfs.forEach(function(t){t.streets.forEach(function(s){s.stops.forEach(function(x){window._lastWalkRows.push({turf:t.turf,street:s.street,name:x.name,party:x.party,address:x.address,tags:(x.tags||[]).join('; ')});});});});
   const v=document.getElementById('walkview'); v.classList.remove('hide');
   var sel='<select onchange="openWalk('+lid+',this.value)" style="padding:8px;border:1px solid var(--line);border-radius:9px;font-size:12.5px">'+[1,2,3,4,5].map(function(nn){return '<option value="'+nn+'"'+(nn===turfs?' selected':'')+'>'+(nn===1?'One turf':'Split into '+nn+' turfs')+'</option>';}).join('')+'</select>';
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+d.name+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+sel+'<button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">'+esc(d.name)+' <span class="muted" style="font-size:13px">· '+d.stop_count+' doors · '+d.streets.length+' streets</span></h3><span class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+sel+'<button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportWalk()">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
   html+='<div id="walkmap" class="no-print" style="height:340px;border-radius:12px;margin:10px 0;border:1px solid var(--line)"></div><div class="legend no-print" style="margin:-4px 0 10px;border:0;padding:0">Pin positions: '+esc(d.positions||'')+' ◈</div>';
   d.turfs.forEach(function(t,ti){
     if(d.turf_count>1) html+='<div style="margin:14px 0 2px;padding:8px 12px;background:var(--navy);color:#fff;border-radius:9px;font-weight:600;font-size:13px'+(ti>0?';page-break-before:always':'')+'">Turf '+t.turf+' · '+t.doors+' doors · '+t.streets.length+' streets</div>';
     t.streets.forEach(function(s){
-      html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+s.street+'</div>';
+      html+='<div style="margin:12px 0 4px;font-weight:600;font-size:13px;color:var(--blue)">'+esc(s.street)+'</div>';
       s.stops.forEach(function(x){html+=stopCard(x);});
     });
   });
@@ -918,7 +918,7 @@ async function openCall(lid){
   const d=await (await fetch(API+'/calllist/'+lid+cidq())).json();
   window._lastCallName=d.name+' call sheet'; window._lastCallRows=d.results.map(function(x){return {name:x.name,phone:x.phone,party:x.party,county:x.county,precinct:x.precinct,tags:(x.tags||[]).join('; ')};});
   const v=document.getElementById('walkview'); v.classList.remove('hide');
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">☎ '+d.name+' <span class="muted" style="font-size:13px">· '+d.count+' callable (have phones)</span></h3><span class="no-print"><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV((window._lastCallName||&quot;call-sheet&quot;)+&quot;.csv&quot;,window._lastCallRows)">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">☎ '+esc(d.name)+' <span class="muted" style="font-size:13px">· '+d.count+' callable (have phones)</span></h3><span class="no-print"><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV((window._lastCallName||&quot;call-sheet&quot;)+&quot;.csv&quot;,window._lastCallRows)">⬇ CSV</button> <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></span></div>';
   var CALL_TAGS=['reached','no answer','voicemail','wrong number','support','lean','undecided','oppose'];
   d.results.forEach(function(x){
     var cls=pc[x.party]?('p-'+x.party):'p-NPA';
@@ -941,7 +941,7 @@ async function loadFundraising(){
 async function loadPetitions(){
   var d=await (await fetch(API+'/lists'+cidq())).json();
   document.getElementById('pet-sheet').innerHTML=''; document.getElementById('pet-sigresult').innerHTML='';
-  document.getElementById('pet-picker').innerHTML= d.lists.length ? 'Pre-fill from: '+d.lists.map(function(l){return '<a onclick="openPetition('+l.id+')" style="color:var(--blue);cursor:pointer;border-bottom:1px dotted;margin-right:12px">'+l.name+'</a>';}).join('') : '<span class="muted">No lists yet — build one in Targeting first.</span>';
+  document.getElementById('pet-picker').innerHTML= d.lists.length ? 'Pre-fill from: '+d.lists.map(function(l){return '<a onclick="openPetition('+l.id+')" style="color:var(--blue);cursor:pointer;border-bottom:1px dotted;margin-right:12px">'+esc(l.name)+'</a>';}).join('') : '<span class="muted">No lists yet — build one in Targeting first.</span>';
 }
 async function openPetition(lid){
   var d=await (await fetch(API+'/petition/'+lid)).json();
@@ -951,8 +951,8 @@ async function validateSig(){
   var name=document.getElementById('pet-sig').value.trim(); if(!name)return;
   var d=await (await fetch(API+'/petition/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})).json();
   var el=document.getElementById('pet-sigresult');
-  if(d.match==='exact') el.innerHTML='<span style="color:var(--good)">✓ Exact match on the roll: '+d.name+'</span>';
-  else if(d.match==='partial') el.innerHTML='<span style="color:var(--warn)">≈ Possible matches: '+d.candidates.map(function(c){return c.name;}).join(', ')+'</span>';
+  if(d.match==='exact') el.innerHTML='<span style="color:var(--good)">✓ Exact match on the roll: '+esc(d.name)+'</span>';
+  else if(d.match==='partial') el.innerHTML='<span style="color:var(--warn)">≈ Possible matches: '+d.candidates.map(function(c){return esc(c.name);}).join(', ')+'</span>';
   else el.innerHTML='<span style="color:var(--rep)">✗ No match on the roll — signature may be invalid.</span>';
 }
 document.addEventListener('keydown',function(e){
