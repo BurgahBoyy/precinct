@@ -198,6 +198,86 @@
   [data-theme="dark"] .skel{background:#1a2440}
   [data-theme="dark"] .tagchip{background:#0f2a22;color:#7ee0bb;border-color:#1d5c45}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* ============ UX POLISH LAYER (2026-07-06, additive — lifts every screen) ============ */
+  :root{
+    --shadow-sm:0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.04);
+    --shadow-md:0 2px 6px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+    --shadow-lg:0 12px 40px rgba(13,21,38,.16);
+    --ring:0 0 0 3px rgba(37,99,235,.18);
+  }
+  body{background:
+    radial-gradient(900px 500px at 100% -8%, rgba(37,99,235,.05), transparent 60%),
+    var(--bg);}
+  /* Sidebar: depth + refined brand + active rail */
+  .side{box-shadow:inset -1px 0 0 rgba(255,255,255,.03), 2px 0 20px rgba(13,21,38,.12)}
+  .brand{padding:20px 20px 16px}
+  .brand .mark{box-shadow:0 4px 14px rgba(37,99,235,.45); transition:transform .18s}
+  .side:hover .brand .mark{transform:rotate(-4deg) scale(1.04)}
+  .nav{position:relative; border-radius:10px; transition:background .16s,color .16s,padding .16s}
+  .nav:hover{padding-left:14px}
+  .nav.on{box-shadow:inset 3px 0 0 #60a5fa, 0 4px 14px rgba(37,99,235,.28)}
+  .side .foot{opacity:.85}
+  /* Top bar: subtle glass + tighter */
+  .top{backdrop-filter:saturate(1.1); box-shadow:0 1px 0 var(--line), 0 6px 18px -14px rgba(15,23,42,.25)}
+  .top h1{background:linear-gradient(90deg,var(--ink),color-mix(in srgb,var(--ink) 62%, var(--blue))); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  /* Cards: softer edges, layered shadow, lift on hover */
+  .card{border-radius:18px; box-shadow:var(--shadow-sm); transition:box-shadow .2s, transform .2s, border-color .2s}
+  .card:hover{box-shadow:var(--shadow-md); transform:translateY(-1px)}
+  /* KPI tiles: quiet gradient + hover accent already there — refine */
+  .kpi{border-radius:14px; background:linear-gradient(180deg, var(--card), color-mix(in srgb,var(--card) 92%, var(--bg))); box-shadow:var(--shadow-sm); transition:transform .14s, box-shadow .2s}
+  .kpi:hover{transform:translateY(-2px); box-shadow:var(--shadow-md)}
+  .kpi b{letter-spacing:-.02em}
+  .kpi small{text-transform:uppercase; letter-spacing:.06em; font-size:11px; font-weight:600; opacity:.75}
+  /* Buttons: crisper, spring press, focus ring */
+  .btn{border-radius:11px; box-shadow:0 1px 2px rgba(37,99,235,.25), inset 0 1px 0 rgba(255,255,255,.15); transition:background .15s, box-shadow .18s, transform .08s}
+  .btn:hover{box-shadow:0 4px 14px rgba(37,99,235,.32); transform:translateY(-1px)}
+  .btn:active{transform:translateY(0) scale(.985)}
+  .btn:focus-visible{outline:none; box-shadow:var(--ring), 0 4px 14px rgba(37,99,235,.32)}
+  .btn.ghost{box-shadow:var(--shadow-sm)}
+  .btn.ghost:hover{box-shadow:var(--shadow-md); transform:translateY(-1px)}
+  input:focus-visible, select:focus-visible{outline:none; box-shadow:var(--ring); border-color:var(--blue)}
+  .search input{border-radius:12px; transition:box-shadow .18s, border-color .18s}
+  /* Tables: airier rows, hover wash, header polish */
+  th{font-size:10px; letter-spacing:.7px; padding-top:11px; padding-bottom:11px}
+  td{padding-top:11px; padding-bottom:11px}
+  tbody tr{transition:background .12s, box-shadow .12s}
+  tbody tr:hover{background:color-mix(in srgb, var(--blue) 6%, transparent); box-shadow:inset 2px 0 0 var(--blue)}
+  /* Pills & chips: rounder, softer */
+  .pill{border-radius:999px; letter-spacing:.02em; box-shadow:0 1px 2px rgba(15,23,42,.12)}
+  .chip{border-radius:999px; transition:transform .1s, background .12s}
+  .chip:hover{transform:translateY(-1px)}
+  .tagchip{box-shadow:var(--shadow-sm)}
+  /* Bars: rounded, gentle sheen */
+  .bar{border-radius:999px}
+  .bar>span{border-radius:999px; background:linear-gradient(90deg, var(--blue), #60a5fa)}
+  /* Drawer: elevated, smoother slide, sticky header shadow */
+  .drawer{box-shadow:var(--shadow-lg); transition:transform .22s cubic-bezier(.22,.8,.22,1)}
+  .dhead{box-shadow:0 1px 0 var(--line)}
+  .scrim{backdrop-filter:blur(2px); background:#0f172a66}
+  /* Banner + badges: softer */
+  .banner{border-radius:12px}
+  .badge{border-radius:999px; box-shadow:var(--shadow-sm)}
+  /* Section entrance: a touch smoother */
+  section{animation:fadeUp .22s ease}
+  @keyframes fadeUp{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+  /* Toast: pill + lift */
+  .toast{border-radius:12px; box-shadow:var(--shadow-lg)}
+  /* Empty states: warmer */
+  .empty{padding:34px 14px}
+  .empty .big{font-size:30px; filter:saturate(.6)}
+  /* AI pill: subtle glow */
+  .ai-pill{box-shadow:0 2px 10px rgba(124,58,237,.35)}
+  /* Dark-mode niceties */
+  [data-theme="dark"] body{background:
+    radial-gradient(900px 500px at 100% -8%, rgba(96,165,250,.10), transparent 60%),
+    var(--bg);}
+  [data-theme="dark"] .card{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  [data-theme="dark"] .card:hover{box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  [data-theme="dark"] tbody tr:hover{background:rgba(96,165,250,.10)}
+  [data-theme="dark"] .top h1{background:linear-gradient(90deg,var(--ink),#9ec2ff); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  @media(prefers-reduced-motion:reduce){.nav:hover{padding-left:12px} .card:hover,.kpi:hover,.btn:hover,.btn:active{transform:none}}
+
 </style>
 </head>
 <body>
