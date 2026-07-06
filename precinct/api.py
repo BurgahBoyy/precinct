@@ -524,71 +524,6 @@ def director_brief(campaign_id: int = DEFAULT_CID) -> dict:
             "note": "AI saw aggregates only; names were merged into templates locally. Human sends every message."}
 
 
-class DirectorScheduleRequest(BaseModel):
-    enabled: bool = True
-    hour: int = Field(default=7, ge=0, le=23)
-    email: str = ""
-
-
-@app.post("/director/run")
-def director_run_v2(campaign_id: int = DEFAULT_CID) -> dict:
-    """Director v2: run + PERSIST today's plan (used by the button and the heartbeat)."""
-    from . import director as DIR
-    return DIR.run_and_store(campaign_id, _get_voters, today=TODAY)
-
-
-@app.get("/director/runs")
-def director_runs(campaign_id: int = DEFAULT_CID, limit: int = 10) -> dict:
-    return {"runs": DB.get_director_runs(campaign_id, limit)}
-
-
-@app.get("/director/latest")
-def director_latest(campaign_id: int = DEFAULT_CID) -> dict:
-    r = DB.get_latest_director_run(campaign_id)
-    if not r:
-        return {"run": None}
-    import json as _j
-    return {"run": {**{k: r[k] for k in ("id", "as_of", "outstanding", "banked", "brief", "method", "created")},
-                    "plan": _j.loads(r["plan"]) if r.get("plan") else None}}
-
-
-@app.get("/director/schedule")
-def director_get_schedule(campaign_id: int = DEFAULT_CID) -> dict:
-    sc = DB.get_director_schedule(campaign_id)
-    return {"schedule": sc or {"campaign_id": campaign_id, "enabled": 0, "hour": 7, "email": "", "last_run": None}}
-
-
-@app.post("/director/schedule")
-def director_set_schedule(req: DirectorScheduleRequest, request: Request, campaign_id: int = DEFAULT_CID) -> dict:
-    _require_member(request, campaign_id)
-    DB.set_director_schedule(campaign_id, req.enabled, req.hour, req.email.strip())
-    DB.log_action(campaign_id, "director.schedule", f"enabled={req.enabled} hour={req.hour}")
-    return {"schedule": DB.get_director_schedule(campaign_id)}
-
-
-@app.post("/director/run-scheduled")
-def director_run_scheduled(token: str = "") -> dict:
-    """Autonomous heartbeat: run every campaign whose schedule is enabled, persist each plan,
-    and DRAFT a morning brief. Guarded by PRECINCT_HEARTBEAT_TOKEN so only the scheduler calls it.
-    Never sends to real voters; the manager email is a follow-up (send-gated)."""
-    want = _os.environ.get("PRECINCT_HEARTBEAT_TOKEN", "")
-    if want and token != want:
-        raise HTTPException(status_code=403, detail="bad heartbeat token")
-    from . import director as DIR
-    ran = []
-    for sc in DB.all_enabled_schedules():
-        cid = sc["campaign_id"]
-        try:
-            r = DIR.run_and_store(cid, _get_voters, today=TODAY)
-            DB.mark_director_ran(cid, TODAY.isoformat())
-            ran.append({"campaign_id": cid, "run_id": r["run_id"], "outstanding": r["outstanding"],
-                        "email_to": sc.get("email") or None, "brief": r["brief"][:200]})
-        except Exception as e:
-            ran.append({"campaign_id": cid, "error": str(e)[:120]})
-    return {"ran": ran, "count": len(ran),
-            "note": "plans persisted; briefs are drafted for the managers (email send is a gated follow-up)."}
-
-
 @app.get("/audit")
 def audit(campaign_id: int = DEFAULT_CID, limit: int = 20) -> dict:
     return {"events": DB.get_audit(campaign_id, limit)}
@@ -768,7 +703,8 @@ _FRONTEND = Path(__file__).resolve().parent.parent / "console" / "index.html"
 
 @app.get("/")
 def frontend() -> FileResponse:
-    return FileResponse(str(_FRONTEND))
+    # no-cache so a fresh deploy is seen immediately (ETag still makes it cheap) — shared links never go stale
+    return FileResponse(str(_FRONTEND), headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 _OG = Path(__file__).resolve().parent.parent / "console" / "og.png"
