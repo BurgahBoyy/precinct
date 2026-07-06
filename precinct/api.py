@@ -107,7 +107,7 @@ def _segment(query: str, limit: int = 1000):
     parsed = NL.parse(query, as_of=TODAY, low_propensity_threshold=LOW_PROP)
     if PGS:
         total, matched = PGS.segment(parsed.filters, parsed.low_propensity, LOW_PROP, limit=limit, as_of=TODAY, predicate=parsed.predicate)
-        return parsed, matched, total
+        return parsed, matched, total   # total<0 => "at least |total|" (candidate cap truncated the count)
     _, matched = _run_query(query, limit)
     return parsed, matched, len(matched)
 LOW_PROP = 0.34
