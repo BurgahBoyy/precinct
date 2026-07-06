@@ -53,8 +53,9 @@ def allowed(ip: str, bucket: str) -> bool:
     now = time.time()
     key = (ip, bucket)
     with _LOCK:
-        if len(_HITS) > 10000:      # bound memory under address churn
-            _HITS.clear()
+        if len(_HITS) > 20000:      # AUDIT FIX #8: evict only EXPIRED keys, never nuke the whole map
+            for k in [k for k, v in _HITS.items() if not v or now - v[-1] > max(p for _, p in LIMITS.values())]:
+                _HITS.pop(k, None)
         q = [t for t in _HITS.get(key, []) if now - t < per]
         if len(q) >= maxn:
             _HITS[key] = q
