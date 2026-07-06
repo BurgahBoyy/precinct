@@ -1,4 +1,5 @@
-# Precinct — Independent Audit (S7)
+# Precinct — Internal Adversarial Review (S7)
+> NOTE (2026-07-06): this is an INTERNAL adversarial pass by a fresh-context agent of the same build system — rigorous, but NOT a third-party audit. A external review is a future item.
 *Fresh-context adversarial review by a skeptical senior-engineer agent. Date: 2026-07-01. The builder can't grade itself — this is required by the build kit.*
 
 ## Verdict
