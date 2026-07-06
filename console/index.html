@@ -700,30 +700,40 @@ async function beat(step,total,text,extraMs){
 }
 function stopTour(){ if(window._tour){window._tour.cancel=true;} _tbShow(false);
   var t=document.getElementById('toast'); if(t){t.classList.remove('show','tour');} }
+function _tourScroll(sel,block){ try{ var el=(typeof sel==='string')?document.querySelector(sel):sel; if(el) el.scrollIntoView({behavior:'smooth',block:block||'center'}); }catch(e){} }
+function _tourFlash(el){ try{ if(!el) return; el.style.transition='box-shadow .35s ease'; el.style.borderRadius='12px'; el.style.boxShadow='0 0 0 4px rgba(91,157,255,.55)'; setTimeout(function(){ el.style.boxShadow=''; },2600); }catch(e){} }
 async function runTour(){
   if(window._tour&&window._tour.on) return;
   window._tour={on:true,cancel:false};
-  var TOTAL=8;
+  var TOTAL=11;
   _tbShow(true);
   try{
     show('dash'); window.scrollTo(0,0);
-    if(!await beat(1,TOTAL,'Welcome to Precinct — the AI-native campaign operating system. Sit back; this 60-second tour drives itself. (Press Exit or Esc anytime.)',600)) return stopTour();
+    if(!await beat(1,TOTAL,'Welcome to Precinct \u2014 the AI-native campaign operating system. Every other tool shows you data and leaves the work to you. Precinct does the work. Sit back \u2014 this tour drives itself. (Press Exit or Esc anytime.)',700)) return stopTour();
     show('target');
-    if(!await beat(2,TOTAL,'You don\u2019t build queries here. You just say what you want, in plain English \u2014 watch.',300)) return stopTour();
+    if(!await beat(2,TOTAL,'It starts with plain English. You don\u2019t build queries \u2014 you just say who you want to reach. Watch.',300)) return stopTour();
     await autotype(document.getElementById('q'),'Republican men under 40 in Duval county');
     await _tourSleep(500); await runTarget();
-    if(!await beat(3,TOTAL,'Precinct shows exactly how it read you \u2014 party, gender, age, county \u2014 so there are never silent misreads.')) return stopTour();
+    if(!await beat(3,TOTAL,'Precinct shows exactly how it read you \u2014 party, gender, age, county \u2014 so there are never silent misreads. Save it and it becomes a list.')) return stopTour();
     show('field'); await _tourSleep(600); await openWalk(1,3);
-    if(!await beat(4,TOTAL,'Any saved list becomes a street-ordered walk sheet, split into balanced turfs, plotted on a map \u2014 ready to hand a volunteer.')) return stopTour();
-    var ck=document.getElementById('chase-kpis'); if(ck) ck.scrollIntoView({behavior:'smooth',block:'center'});
-    if(!await beat(5,TOTAL,'The season weapon: the BALLOT CHASE. These are your supporters whose mail ballots are OUT but not returned \u2014 a banked vote can never be lost.')) return stopTour();
+    if(!await beat(4,TOTAL,'Any list becomes a street-ordered walk sheet, split into balanced turfs, plotted on a map \u2014 ready to hand a volunteer.')) return stopTour();
     show('finance'); window.scrollTo(0,0);
-    if(!await beat(6,TOTAL,'Now the part nobody else has: hand Claude the messy paperwork a treasurer actually gets\u2026',200)) return stopTour();
+    if(!await beat(5,TOTAL,'And the part nobody else has: hand Claude the messy paperwork a treasurer actually gets\u2026',200)) return stopTour();
     await autotype(document.getElementById('fin-intake'),'check from carmen ruiz, five hundred even, no 2210, 6/25/26, 12 vista ct orlando');
     runIntake(); await _tourSleep(6500);
-    if(!await beat(7,TOTAL,'Read, structured, and compliance-checked in seconds \u2014 and a human always approves before anything is filed.')) return stopTour();
+    if(!await beat(6,TOTAL,'\u2026read, structured, and compliance-checked in seconds \u2014 and a human always approves before anything is filed.')) return stopTour();
+    show('dash'); window.scrollTo(0,0); await _tourSleep(300);
+    _tourScroll('#dirbtn','center'); _tourFlash(document.getElementById('dirbtn'));
+    if(!await beat(7,TOTAL,'Everything so far, YOU triggered. This is the part that triggers itself \u2014 meet THE DIRECTOR, the campaign manager that never sleeps. Watch it build today\u2019s plan, live.',500)) return stopTour();
+    await runDirector();
+    _tourScroll('#dirout','start');
+    if(!await beat(8,TOTAL,'It doesn\u2019t just hand you a list. It reasons about the day first \u2014 who is most winnable right now, and why \u2014 then writes you a plain-language brief.')) return stopTour();
+    _tourScroll('#dirout b','center');
+    if(!await beat(9,TOTAL,'Then the ranked chase: each supporter in priority order \u2014 call or knock, days their ballot has been out, turnout odds \u2014 and the outreach message ALREADY WRITTEN, in your voice. A human just hits copy. (The AI sees only aggregates; names are merged on your machine.)',400)) return stopTour();
+    var sw=document.getElementById('dir-auto'); _tourScroll(sw?sw.closest('label'):'#dir-status','center'); _tourFlash(sw?sw.closest('label'):null);
+    if(!await beat(10,TOTAL,'And this switch is the whole point: flip \u201cRun every morning\u201d and the Director runs ITSELF at 7am, every day, and emails you the brief. The chase runs while you sleep.',600)) return stopTour();
     show('dash'); window.scrollTo(0,0);
-    await beat(8,TOTAL,'Everything you just saw runs on sample data today. The day the real Florida file loads, it\u2019s 13 million voters in the same tool. That\u2019s Precinct.',800);
+    await beat(11,TOTAL,'Everything you just saw runs on sample data today. The day the real Florida file loads, it\u2019s 13 million voters in the same tool \u2014 with a manager that works every morning without being asked. That\u2019s Precinct.',900);
   }catch(e){}
   _tbShow(false);
   window._tour={on:false,cancel:false};
