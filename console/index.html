@@ -242,10 +242,14 @@
             <h3 style="margin:0">The Director <span class="ai-pill" style="vertical-align:2px">✦ runs the chase</span></h3>
             <span class="no-print" style="display:flex;gap:8px">
               <button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="dlCSV('todays-plan.csv',window._lastDirActions)">⬇ CSV</button>
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer" title="Run automatically every morning and save the plan">
+                <input type="checkbox" id="dir-auto" onchange="setDirectorAuto(this.checked)" style="width:15px;height:15px"> Run every morning
+              </label>
               <button class="btn" id="dirbtn" onclick="runDirector()">Generate today's plan ▶</button>
             </span>
           </div>
-          <div class="sub">Precinct doesn't just show the chase — it runs it: who to contact first, by which channel, with the message already written. AI plans from aggregates only; names are merged on your machine.</div>
+          <div class="sub">Precinct doesn't just show the chase — it <b>runs</b> it, and can run itself every morning: who to contact first, by which channel, with the message already written. AI plans from aggregates only; names are merged on your machine.</div>
+          <div id="dir-status" class="legend" style="margin:0 0 6px;border:0;padding:0"></div>
           <div id="dirout"></div>
         </div>
         <div class="card" style="margin-top:16px">
@@ -816,12 +820,32 @@ async function commitDraft(){
   await fetch(API+'/finance/contributions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({donor_name:dr.donor_name||'(unknown)',amount:parseFloat(dr.amount),date:iso,address:dr.address||'',check_number:dr.check_number||'',campaign_id:CID})});
   document.getElementById('fin-intake').value=''; document.getElementById('fin-draft').innerHTML='<div style="color:var(--good);font-size:13px">✓ Added to ledger after your review.</div>'; loadFinance();
 }
+async function loadDirectorStatus(){
+  try{
+    var sc=await (await fetch(API+'/director/schedule'+cidq())).json();
+    var on=sc.schedule && (sc.schedule.enabled==1||sc.schedule.enabled===true);
+    var box=document.getElementById('dir-auto'); if(box) box.checked=!!on;
+    var last=await (await fetch(API+'/director/latest'+cidq())).json();
+    var el=document.getElementById('dir-status'); if(!el) return;
+    var bits=[];
+    if(on) bits.push('✓ Auto-runs every morning'+(sc.schedule.last_run?(' · last ran '+esc(sc.schedule.last_run)):' (first run tonight)'));
+    if(last.run) bits.push('Last plan: '+esc(last.run.as_of)+' · '+last.run.outstanding+' outstanding · '+esc(last.run.method));
+    el.innerHTML=bits.join(' &nbsp;·&nbsp; ');
+  }catch(e){}
+}
+async function setDirectorAuto(on){
+  try{
+    await fetch(API+'/director/schedule'+cidq(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:on,hour:7,email:''})});
+    toast(on?'The Director will run itself every morning':'Auto-run off');
+    loadDirectorStatus();
+  }catch(e){toast('Could not save schedule');}
+}
 async function runDirector(){
   var btn=document.getElementById('dirbtn'); btn.disabled=true; btn.innerHTML='<span class="spin" style="border-top-color:#fff"></span> Planning…';
   var out=document.getElementById('dirout');
   out.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px"><span class="spin"></span> The Director is building today’s plan…</div>';
   try{
-    var d=await (await fetch(API+'/director/brief'+cidq(),{method:'POST'})).json();
+    var d=await (await fetch(API+'/director/run'+cidq(),{method:'POST'})).json();
     window._lastDirActions=(d.actions||[]).map(function(a){return {priority:a.priority,segment:a.segment,channel:a.channel,name:a.name,phone:a.phone,address:a.address,days_out:a.days_out,turnout_pct:a.turnout_pct,message:a.message};});
     var pill=d.method==='claude'?'<span class="ai-pill">✦ Planned by Claude</span>':'<span class="rule-pill">rule-based plan · offline</span>';
     var segs=(d.segments||[]).map(function(s){return '<span class="chip" title="'+esc(s.meaning)+'">'+s.key+' · '+s.count+'</span>';}).join('');
