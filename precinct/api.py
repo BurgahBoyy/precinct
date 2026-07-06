@@ -490,6 +490,21 @@ async def admin_load_ballots(request: Request, ballots_file: UploadFile = File(.
     return {"loaded": n, "election": BAL.current_election()}
 
 
+@app.post("/director/brief")
+def director_brief(campaign_id: int = DEFAULT_CID) -> dict:
+    """The Director: today's prioritized chase plan + AI brief + merged outreach (names merged locally)."""
+    from . import director as DIR
+    plan = DIR.build_plan(campaign_id, _get_voters, today=TODAY)
+    brief, templates, method = DIR.ai_brief(plan)
+    DB.log_action(campaign_id, "director.brief", f"{plan['outstanding']} outstanding, {len(plan['actions'])} actions, {method}")
+    return {"brief": brief, "method": method, "as_of": plan["as_of"], "election": plan["election"],
+            "days_to_election": plan["days_to_election"], "segments": plan["segments"],
+            "banked": plan["banked"], "outstanding": plan["outstanding"],
+            "actions": DIR.merged_actions(plan, templates),
+            "season_provenance": plan["season_provenance"],
+            "note": "AI saw aggregates only; names were merged into templates locally. Human sends every message."}
+
+
 @app.get("/audit")
 def audit(campaign_id: int = DEFAULT_CID, limit: int = 20) -> dict:
     return {"events": DB.get_audit(campaign_id, limit)}
