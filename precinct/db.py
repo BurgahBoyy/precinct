@@ -60,7 +60,44 @@ _DDL_COMMON_TABLES = [
     ("users", "id {IDENT}, email TEXT UNIQUE, name TEXT, pw_hash TEXT, salt TEXT, role TEXT, created TEXT"),
     ("sessions", "token_hash TEXT UNIQUE, user_id INT, expires TEXT, created TEXT"),
     ("memberships", "user_id INT, campaign_id INT, role TEXT, created TEXT, UNIQUE(user_id,campaign_id)"),
+    ("director_runs", "id {IDENT}, campaign_id INT, as_of TEXT, outstanding INT, banked INT, brief TEXT, method TEXT, plan TEXT, created TEXT"),
+    ("director_schedule", "campaign_id INT UNIQUE, enabled INT, hour INT, email TEXT, last_run TEXT, updated TEXT"),
 ]
+
+
+# --- Director v2 (autonomous runs + schedule) ---
+def save_director_run(cid, as_of, outstanding, banked, brief, method, plan_json) -> int:
+    return _write("INSERT INTO director_runs(campaign_id,as_of,outstanding,banked,brief,method,plan,created) VALUES(?,?,?,?,?,?,?,?)",
+                  (cid, as_of, outstanding, banked, brief, method, plan_json, _now()), want_id=True)
+
+def get_director_runs(cid, limit=10) -> list[dict]:
+    limit = max(1, min(int(limit), 60))
+    return q("SELECT id,as_of,outstanding,banked,brief,method,created FROM director_runs WHERE campaign_id=? ORDER BY id DESC LIMIT ?", (cid, limit))
+
+def get_latest_director_run(cid) -> dict | None:
+    r = q("SELECT * FROM director_runs WHERE campaign_id=? ORDER BY id DESC LIMIT 1", (cid,))
+    return r[0] if r else None
+
+def set_director_schedule(cid, enabled, hour, email):
+    if _is_pg:
+        _write("INSERT INTO director_schedule(campaign_id,enabled,hour,email,last_run,updated) VALUES(?,?,?,?,NULL,?) "
+               "ON CONFLICT (campaign_id) DO UPDATE SET enabled=EXCLUDED.enabled, hour=EXCLUDED.hour, email=EXCLUDED.email, updated=EXCLUDED.updated",
+               (cid, 1 if enabled else 0, hour, email, _now()))
+    else:
+        row = q("SELECT last_run FROM director_schedule WHERE campaign_id=?", (cid,))
+        last = row[0]["last_run"] if row else None
+        _write("INSERT OR REPLACE INTO director_schedule(campaign_id,enabled,hour,email,last_run,updated) VALUES(?,?,?,?,?,?)",
+               (cid, 1 if enabled else 0, hour, email, last, _now()))
+
+def get_director_schedule(cid) -> dict | None:
+    r = q("SELECT * FROM director_schedule WHERE campaign_id=?", (cid,))
+    return r[0] if r else None
+
+def all_enabled_schedules() -> list[dict]:
+    return q("SELECT * FROM director_schedule WHERE enabled=1")
+
+def mark_director_ran(cid, when):
+    _write("UPDATE director_schedule SET last_run=? WHERE campaign_id=?", (when, cid))
 
 
 def _init_schema(c):
