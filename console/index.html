@@ -709,7 +709,7 @@ async function voterSearch(){
 }
 function row(r){const cls=pc[r.party]?('p-'+r.party):'p-NPA';
   return `<tr onclick="openVoter('${r.voter_id}')">
-    <td>${r.name} <span class="muted mono">#${r.voter_id}</span></td>
+    <td>${esc(r.name)} <span class="muted mono">#${r.voter_id}</span></td>
     <td><span class="pill ${cls}">${r.party}</span></td>
     <td>${r.county}</td><td>${r.precinct}</td>
     <td class="mono">${r.age??'—'}</td>
@@ -721,12 +721,12 @@ async function openVoter(id){
   const cls=pc[v.party]?('p-'+v.party):'p-NPA';
   const hist=(v.voting_history||[]).slice().reverse().map(h=>`<div class="ev"><span class="dot"></span><span>${h.date} · ${h.type} · <span class="muted">${h.method.replace(/_/g,' ')}</span></span></div>`).join('')||'<div class="muted">No voting history on file.</div>';
   document.getElementById('dcontent').innerHTML=`
-    <div class="dhead"><div><div style="font-size:17px;font-weight:600">${v.name}</div>
+    <div class="dhead"><div><div style="font-size:17px;font-weight:600">${esc(v.name)}</div>
       <div class="muted" style="font-size:12.5px">#${v.voter_id} · <span class="pill ${cls}">${v.party}</span> · ${v.status} · ${v.provenance}</div></div>
       <button class="x" onclick="closeDrawer()">×</button></div>
     <div class="body">
       <div class="kv"><span>Age ◈</span><span class="mono">${v.age??'—'}</span></div>
-      <div class="kv"><span>Residence</span><span style="text-align:right">${v.residence||'—'}</span></div>
+      <div class="kv"><span>Residence</span><span style="text-align:right">${esc(v.residence||'—')}</span></div>
       <div class="kv"><span>County / precinct</span><span>${v.county} · ${v.precinct}</span></div>
       <div class="kv"><span>Districts (C/H/S)</span><span class="mono">${v.districts.congressional||'—'} / ${v.districts.house||'—'} / ${v.districts.senate||'—'}</span></div>
       <div class="kv"><span>Registered</span><span class="mono">${v.registration_date||'—'}</span></div>
@@ -769,17 +769,17 @@ async function loadLists(){
   document.getElementById('listview').classList.add('hide');
   if(!d.lists.length){w.innerHTML='<div class="empty"><span class="big">▤</span>No lists in this campaign yet.<br/>Build one in <a style="color:var(--blue);cursor:pointer" onclick="show(\'target\')">Targeting</a> → “Save as list”.</div>';return;}
   w.innerHTML=d.lists.map(l=>`<div class="card" style="cursor:pointer;margin:8px 0" onclick="openList(${l.id})">
-     <div style="display:flex;justify-content:space-between"><b>${l.name}</b><span class="muted">${l.count} voters</span></div>
-     <div class="muted" style="font-size:12.5px">“${l.query}” · ${l.created}</div></div>`).join('');
+     <div style="display:flex;justify-content:space-between"><b>${esc(l.name)}</b><span class="muted">${l.count} voters</span></div>
+     <div class="muted" style="font-size:12.5px">“${esc(l.query)}” · ${l.created}</div></div>`).join('');
 }
 async function openList(id){
   const d=await (await fetch(API+'/lists/'+id)).json();
   window._lastListName=d.name; window._lastListRows=d.results.map(r=>({voter_id:r.voter_id,name:r.name,party:r.party,county:r.county,precinct:r.precinct,age:r.age,turnout_pct:Math.round(r.turnout_score*100)}));
   const v=document.getElementById('listview');v.classList.remove('hide');
-  v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">${d.name} <span class="muted" style="font-size:13px">· ${d.count} voters</span></h3><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportList()">⬇ CSV</button></div>
-    <div class="sub">“${d.query}”</div>
+  v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">${esc(d.name)} <span class="muted" style="font-size:13px">· ${d.count} voters</span></h3><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="exportList()">⬇ CSV</button></div>
+    <div class="sub">“${esc(d.query)}”</div>
     <div style="overflow:auto"><table><thead><tr><th>Name</th><th>Party</th><th>County</th><th>Prec.</th><th>Age ◈</th><th>Turnout ◈</th></tr></thead>
-    <tbody>${d.results.map(r=>{const cls=pc[r.party]?('p-'+r.party):'p-NPA';return `<tr onclick="openVoter('${r.voter_id}')"><td>${r.name}</td><td><span class="pill ${cls}">${r.party}</span></td><td>${r.county}</td><td class="mono">${r.precinct}</td><td class="mono">${r.age??'—'}</td><td class="mono">${Math.round(r.turnout_score*100)}%</td></tr>`;}).join('')}</tbody></table></div>`;
+    <tbody>${d.results.map(r=>{const cls=pc[r.party]?('p-'+r.party):'p-NPA';return `<tr onclick="openVoter('${r.voter_id}')"><td>${esc(r.name)}</td><td><span class="pill ${cls}">${r.party}</span></td><td>${r.county}</td><td class="mono">${r.precinct}</td><td class="mono">${r.age??'—'}</td><td class="mono">${Math.round(r.turnout_score*100)}%</td></tr>`;}).join('')}</tbody></table></div>`;
   v.scrollIntoView({behavior:'smooth'});
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
@@ -793,7 +793,7 @@ async function loadFinance(){
   document.getElementById('fin-flags').innerHTML= flags.length ? '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Compliance</div>'+flags.map(function(f){var err=f.severity==='error';return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;margin:5px 0;background:'+(err?'#fef2f2':'#fff7ed')+';color:'+(err?'#991b1b':'#b45309')+';font-size:12.5px"><span>'+(err?'⛔':'⚠')+'</span><span>'+f.message+'</span></div>';}).join('') : '<div style="color:var(--good);font-size:13px">✓ No compliance issues (limit $'+rep.limit_applied+' per election).</div>';
   var c=led.contributions||[], e=led.expenses||[];
   window._lastLedgerRows=c.map(function(x){return {type:'in',who:x.donor_name,amount:x.amount,date:x.date,detail:x.phase+' · '+x.method,provenance:x.provenance};}).concat(e.map(function(x){return {type:'out',who:x.payee,amount:x.amount,date:x.date,detail:x.purpose,provenance:x.provenance};}));
-  document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+x.donor_name+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+x.payee+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.purpose+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
+  document.getElementById('fin-ledger').innerHTML='<table><thead><tr><th>Donor / payee</th><th>Flow</th><th>Amount</th><th>Date</th><th>Detail</th><th class="muted">src</th></tr></thead><tbody>'+c.map(function(x){return '<tr><td>'+esc(x.donor_name)+'</td><td><span class="pill" style="background:var(--good)">in</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+x.phase+' · '+x.method+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+e.map(function(x){return '<tr><td>'+esc(x.payee)+'</td><td><span class="pill" style="background:var(--rep)">out</span></td><td class="mono">'+fmt$(x.amount)+'</td><td class="mono">'+x.date+'</td><td class="muted">'+esc(x.purpose)+'</td><td class="muted">'+x.provenance+'</td></tr>';}).join('')+'</tbody></table>';
 }
 function _fld(l,v){return '<div><div style="font-size:11px;color:var(--muted)">'+l+'</div><div style="font-size:13.5px">'+(v||'—')+'</div></div>';}
 async function runIntake(){
@@ -860,7 +860,7 @@ async function loadChase(){
     var CH=['knocked','called','texted','no answer'];
     document.getElementById('chase-list').innerHTML=(d.results||[]).length? d.results.map(function(x){
       var cls=pc[x.party]?('p-'+x.party):'p-NPA';
-      return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:12.5px">'+(x.phone||'')+'</span><div class="muted" style="font-size:12px">'+(x.address||'')+'</div><div style="font-size:12px;color:var(--warn);margin-top:2px">ballot requested <span class="mono">'+(x.ballot_requested||'—')+'</span> · sent <span class="mono">'+(x.ballot_sent||'—')+'</span> · <b>NOT RETURNED</b></div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CH.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+      return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+esc(x.name)+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:12.5px">'+esc(x.phone||'')+'</span><div class="muted" style="font-size:12px">'+esc(x.address||'')+'</div><div style="font-size:12px;color:var(--warn);margin-top:2px">ballot requested <span class="mono">'+(x.ballot_requested||'—')+'</span> · sent <span class="mono">'+(x.ballot_sent||'—')+'</span> · <b>NOT RETURNED</b></div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CH.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
     }).join('') : '<div class="empty"><span class="big">✓</span>Every tagged supporter with a ballot out has returned it. The bank is full.</div>';
     document.getElementById('chase-note').textContent='Election: '+s.election+' · data: '+s.provenance+(s.provenance==='illustrative'?' (sample season — real daily files replace this)':'');
   }catch(e){}
@@ -875,7 +875,7 @@ async function loadFieldPicker(){
 var CANVASS_TAGS=['support','lean','undecided','oppose','not home'];
 function stopCard(x){
   var cls=pc[x.party]?('p-'+x.party):'p-NPA';
-  return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span><div class="muted" style="font-size:12px">'+x.address+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CANVASS_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+  return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+esc(x.name)+'</b> <span class="pill '+cls+'">'+x.party+'</span><div class="muted" style="font-size:12px">'+esc(x.address)+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CANVASS_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
 }
 async function openWalk(lid,turfs){
   turfs=parseInt(turfs||1,10);
@@ -922,7 +922,7 @@ async function openCall(lid){
   var CALL_TAGS=['reached','no answer','voicemail','wrong number','support','lean','undecided','oppose'];
   d.results.forEach(function(x){
     var cls=pc[x.party]?('p-'+x.party):'p-NPA';
-    html+='<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+x.name+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:13px">'+x.phone+'</span><div class="muted" style="font-size:12px">'+x.county+' · precinct '+x.precinct+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CALL_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
+    html+='<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin:5px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><b>'+esc(x.name)+'</b> <span class="pill '+cls+'">'+x.party+'</span> <span class="mono" style="font-size:13px">'+esc(x.phone)+'</span><div class="muted" style="font-size:12px">'+x.county+' · precinct '+x.precinct+'</div></div><div id="tags-'+x.voter_id+'" style="font-size:11px;color:var(--good);text-align:right">'+(x.tags||[]).join(', ')+'</div></div><div class="no-print" style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'+CALL_TAGS.map(function(t){return '<button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick="canvass(\''+x.voter_id+'\',\''+t+'\')">'+t+'</button>';}).join('')+'</div></div>';
   });
   v.innerHTML=html; v.scrollIntoView({behavior:'smooth'});
 }
@@ -936,7 +936,7 @@ async function loadFundraising(){
   var d=await (await fetch(API+'/fundraising/report?office='+office+cidq('&'))).json();
   window._lastFundRows=(d.donors||[]).map(function(x){return {donor:x.donor,given_total:x.given_total,given_general:x.given_general,room_general:x.room_general,maxed:x.maxed};});
   document.getElementById('fund-list').innerHTML='<table><thead><tr><th>Donor</th><th>Given total</th><th>Given (general)</th><th>Room to give ◈</th><th>Status</th></tr></thead><tbody>'+
-    d.donors.map(function(x){return '<tr><td>'+x.donor+'</td><td class="mono">'+fmt$(x.given_total)+'</td><td class="mono">'+fmt$(x.given_general)+'</td><td class="mono" style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':fmt$(x.room_general))+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
+    d.donors.map(function(x){return '<tr><td>'+esc(x.donor)+'</td><td class="mono">'+fmt$(x.given_total)+'</td><td class="mono">'+fmt$(x.given_general)+'</td><td class="mono" style="color:'+(x.maxed?'var(--rep)':'var(--good)')+'">'+(x.maxed?'$0':fmt$(x.room_general))+'</td><td>'+(x.maxed?'<span class="pill" style="background:var(--rep)">maxed</span>':'<span class="pill" style="background:var(--good)">can ask</span>')+'</td></tr>';}).join('')+'</tbody></table>';
 }
 async function loadPetitions(){
   var d=await (await fetch(API+'/lists'+cidq())).json();
@@ -945,7 +945,7 @@ async function loadPetitions(){
 }
 async function openPetition(lid){
   var d=await (await fetch(API+'/petition/'+lid)).json();
-  document.getElementById('pet-sheet').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div class="sub" style="margin:0">'+d.count+' pre-filled lines · '+d.name+'</div><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></div><table><thead><tr><th>#</th><th>Name</th><th>Address</th><th>Signature</th></tr></thead><tbody>'+d.rows.map(function(r,i){return '<tr><td class="muted mono">'+(i+1)+'</td><td>'+r.name+'</td><td class="muted">'+r.address+'</td><td style="color:var(--muted)">__________________</td></tr>';}).join('')+'</tbody></table>';
+  document.getElementById('pet-sheet').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div class="sub" style="margin:0">'+d.count+' pre-filled lines · '+esc(d.name)+'</div><button class="btn ghost" style="padding:8px 12px;font-size:12.5px" onclick="window.print()">🖨 Print</button></div><table><thead><tr><th>#</th><th>Name</th><th>Address</th><th>Signature</th></tr></thead><tbody>'+d.rows.map(function(r,i){return '<tr><td class="muted mono">'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="muted">'+esc(r.address)+'</td><td style="color:var(--muted)">__________________</td></tr>';}).join('')+'</tbody></table>';
 }
 async function validateSig(){
   var name=document.getElementById('pet-sig').value.trim(); if(!name)return;
