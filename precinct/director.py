@@ -31,7 +31,7 @@ _SEG_DEF = {"OVERDUE": "ballot out more than 14 days — highest risk of never r
 
 def _days_since(iso: str, today: date) -> int | None:
     try:
-        return (today - date.fromisoformat(iso)).days
+        return max(0, (today - date.fromisoformat(iso)).days)   # future-dated (illustrative) -> 0, never negative
     except Exception:
         return None
 
