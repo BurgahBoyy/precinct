@@ -76,3 +76,26 @@ def test_sql_store_expresses_every_parser_label():
             if not PS.can_express(lbl):
                 unmatched.append((q, lbl))
     assert not unmatched, f"NL labels the SQL store can't express (would broaden turf): {unmatched}"
+
+
+def test_multicounty_universe_rescore_runs_in_DEFAULT_suite_AUDIT5():
+    """RE-AUDIT: fix #5's correctness was only proven under PRECINCT_TEST_PG. pg_store rides
+    db.q/_write, which work on SQLite too — so we verify the shared-universe rescore in the
+    DEFAULT suite (no Postgres). Loading a 2nd county whose history adds a general election
+    must re-score the 1st county's voters to the shared denominator."""
+    from precinct import pg_store as PS
+    from precinct import db as DB
+    PS.init_schema()
+    DB._write("DELETE FROM voters"); DB._write("DELETE FROM voter_meta")
+    a_reg = ["DAD\t900000100\tSmith\t\tAda\t\tN\t1 A St\t\tMiami\tFL\t33101\t\t\t\t\t\t\t\tF\t5\t01/01/1980\t01/01/2010\tDEM\t001\t\t\t\tACT\t\t\t\t\t\t\t\t\t"]
+    a_hist = ["DAD\t900000100\t11/03/2020\tGEN\tE"]
+    PS.load_extract_lines(a_reg, a_hist)
+    before = DB.q("SELECT turnout_score FROM voters WHERE voter_id='900000100'")[0]["turnout_score"]
+    uni_before = len(PS._load_universe())
+    b_reg = ["DAD\t900000200\tJones\t\tBob\t\tN\t2 B St\t\tMiami\tFL\t33101\t\t\t\t\t\t\t\tM\t5\t01/01/1980\t01/01/2010\tREP\t002\t\t\t\tACT\t\t\t\t\t\t\t\t\t"]
+    b_hist = ["DAD\t900000200\t11/08/2022\tGEN\tE"]
+    PS.load_extract_lines(b_reg, b_hist)
+    after = DB.q("SELECT turnout_score FROM voters WHERE voter_id='900000100'")[0]["turnout_score"]
+    assert len(PS._load_universe()) == uni_before + 1          # 2020 -> {2020, 2022}
+    assert abs(after - 0.5) < 1e-6 and before > after          # Ada now 1-of-2 generals, comparable
+    DB._write("DELETE FROM voters"); DB._write("DELETE FROM voter_meta")   # clean up shared SQLite
