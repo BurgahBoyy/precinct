@@ -24,6 +24,10 @@ from .store import VoterStore
 app = FastAPI(title="Precinct API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+import logging as _logging
+_logging.basicConfig(level=_logging.INFO, format='{"t":"%(asctime)s","lvl":"%(levelname)s","msg":"%(message)s"}')
+_log = _logging.getLogger("precinct")
+_log.info("precinct starting")
 from . import auth as AUTH  # noqa: E402
 from . import hardening as HARD  # noqa: E402
 
@@ -47,7 +51,14 @@ async def _auth_gate(request: Request, call_next):
         if not user:
             return JSONResponse({"detail": "authentication required"}, status_code=401)
         request.state.user = user
+    import time as _t
+    _t0 = _t.time()
     response = await call_next(request)
+    _ms = int((_t.time() - _t0) * 1000)
+    if response.status_code >= 500:
+        _log.error("5xx %s %s -> %s (%sms)", request.method, request.url.path, response.status_code, _ms)
+    elif _ms > 2000:
+        _log.warning("slow %s %s %sms", request.method, request.url.path, _ms)
     for k, v in HARD.HEADERS.items():
         response.headers.setdefault(k, v)
     return response
