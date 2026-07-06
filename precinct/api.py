@@ -625,11 +625,12 @@ def director_schedule_set(req: DirectorScheduleRequest, campaign_id: int = DEFAU
 
 
 @app.post("/director/run-scheduled")
-def director_run_scheduled(request: Request) -> dict:
+def director_run_scheduled(request: Request, token: str = "") -> dict:
     """The morning heartbeat: token-guarded so only the scheduler can fire it. Runs every campaign
-    with auto-run enabled and persists each plan, so the day's chase is waiting when the manager opens Precinct."""
-    want = _os.environ.get("PRECINCT_CRON_TOKEN", "")
-    got = request.headers.get("X-Precinct-Cron", "")
+    with auto-run enabled and persists each plan, so the day's chase is waiting when the manager opens Precinct.
+    Token accepted via ?token= (what the scheduled heartbeat sends) or the X-Precinct-Cron header."""
+    want = _os.environ.get("PRECINCT_HEARTBEAT_TOKEN", "") or _os.environ.get("PRECINCT_CRON_TOKEN", "")
+    got = token or request.headers.get("X-Precinct-Cron", "")
     if not want or got != want:
         raise HTTPException(status_code=403, detail="scheduler token required")
     from . import director as DIR
