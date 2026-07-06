@@ -354,8 +354,11 @@ class VoterStorePG:
         cand = DB.q(f"SELECT * FROM voters{w} ORDER BY name_last, name_first LIMIT ?", tuple(args) + (cap,))
         voters = [voter_from_row(d) for d in cand]
         narrowed = [v for v in voters if predicate(v)]
-        # total is exact when we didn't hit the candidate cap; otherwise it's a floor
-        total = len(narrowed) if len(cand) < cap else len(narrowed)
+        total = len(narrowed)
+        capped = len(cand) >= cap        # re-audit: be honest when the candidate cap truncated the count
+        if capped:
+            # the true total is >= what we narrowed; signal it rather than silently undercount
+            total = -len(narrowed)       # negative => "at least this many" (API shows |total|+ and a note)
         return total, narrowed[:limit]
 
 
